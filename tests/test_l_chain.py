@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Stage-5.6 P0-4：基线 L（朴素顺序多签链，B1-65 同核）最小验证。
+"""Baseline L (naive sequential multi-signature chain, same B1-65 core): minimal checks.
 
 Run: py -3.11 tests/test_l_chain.py
 """
@@ -31,7 +31,7 @@ def main():
 
     doc0 = b"patient|fields|1..8|full-record-v0"
     sigma0 = L.l_sign_origin(sk_s, pk_s, doc0)
-    record("T1 原始签（B1-65，5,785 B）", len(sigma0) == 5794)
+    record("T1 origin signature (B1-65, 5,785 B)", len(sigma0) == 5794)
 
     doc1 = b"patient|fields|1..8|full-record-v1-minus-field2"
     doc2 = b"patient|fields|1..8|full-record-v2-minus-field2-5"
@@ -41,26 +41,28 @@ def main():
     h3, t3 = L.l_hop(h2, doc3, b"redactor-3", sk3, pk3)
     hops = [(doc1, b"redactor-1", t1, pk1), (doc2, b"redactor-2", t2, pk2),
             (doc3, b"redactor-3", t3, pk3)]
-    record("T2 3 跳顺序多签链验证 PASS", L.l_verify(pk_s, sigma0, doc0, hops),
+    record("T2 3-hop sequential multi-signature chain verifies",
+           L.l_verify(pk_s, sigma0, doc0, hops),
            f"t={time.time()-t0:.1f}s")
 
-    record("T3 篡改中间全文 → 拒",
+    record("T3 tampered intermediate document -> rejected",
            not L.l_verify(pk_s, sigma0, doc0,
                           [(doc1, b"redactor-1", t1, pk1),
                            (doc2 + b"X", b"redactor-2", t2, pk2), hops[2]]))
-    record("T4 篡改 σ₀ → 拒",
+    record("T4 tampered sigma0 -> rejected",
            not L.l_verify(pk_s, bytes([sigma0[0] ^ 1]) + sigma0[1:], doc0, hops))
-    record("T5 身份替换（hop2 用 pk1 验）→ 拒",
+    record("T5 identity swap (hop2 verified with pk1) -> rejected",
            not L.l_verify(pk_s, sigma0, doc0,
                           [hops[0], (doc2, b"redactor-2", t2, pk1), hops[2]]))
-    # 关键对比属性：不出示中间全文（只给终态）则无法验证——链结构要求全历史
-    record("T6 只出示终态文档（缺中间态）→ 拒",
+    # Key contrast property: without presenting the intermediate full documents
+    # (final state only) verification is impossible -- the chain requires full history.
+    record("T6 final-state document only (intermediate states missing) -> rejected",
            not L.l_verify(pk_s, sigma0, doc0, [(doc3, b"agg", t3, pk3)]))
-    record("T7 τ 跨文档重放（hop2 τ 配 doc1'）→ 拒",
+    record("T7 tau replay across documents (hop2 tau with doc1') -> rejected",
            not L.l_verify(pk_s, sigma0, doc0,
                           [hops[0], (b"other-doc", b"redactor-2", t2, pk2), hops[2]]))
 
-    R["meta"] = {"per_hop_bytes": 5794, "note": "L 每跳=1 个 B1 签名；验证需全部中间全文文档",
+    R["meta"] = {"per_hop_bytes": 5794, "note": "L per hop = one B1 signature; verification requires all intermediate full documents",
                  "wall_s": round(time.time() - t0, 2)}
     out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "data", "s56_l_chain_results.json")

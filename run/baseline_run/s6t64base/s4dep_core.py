@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
-"""RouteB Stage-4 E0 core: rings, packing, hashing, sampling (stdlib only).
+"""B1-65 core: rings, packing, hashing, sampling (stdlib + optional NumPy).
 
 Schoolbook negacyclic arithmetic over R_q = Z_q[x]/(x^d + 1).
-Reference implementation: correctness first, no NTT. E0 gate for T-IFS-26973.
+Reference implementation: correctness first, no NTT.
 """
 
-# [Stage-5.10.3 τ=64 候选] 本文件 = 冻结 s4_core.py（sha256 c735976e…）的副本，
-# 仅三处参数层改动（FS dict tau/beta/cbytes 与 c_encode/c_decode 字节宽度参数化），
-# 算法/拒绝规则/域分隔逐字不变。原冻结件零改动；UPGRADE-64 依据 = 5.10.2/2a
-# 量子成本核算（A 口径全档 +4.2~+5.4 bit）+ 用户指定的实施方向（正式签认待核验）。
+# The FS parameter table below is the single source of truth; tau/beta and
+# the challenge-encoding width (cbytes) are parameterized so the τ=64
+# upgrade only touches this dict, never the algorithms.
 import hashlib
 import math
 
 # ---------------- B1-65 (FS layer) and C2 (commitment layer) parameters ------
 FS = dict(
-    q=8380417,          # 2^23 - 2^13 + 1  (Stage-4 erratum: not 73*2^25+1)
+    q=8380417,          # 2^23 - 2^13 + 1, the standard Dilithium prime
     d=256,
     k=5, m=5,
     eta=1,
@@ -36,16 +35,17 @@ def acceptance_closed(fs=FS):
     return p, p ** n
 
 def hinf_w_lower(fs=FS):
-    """H_inf(w) >= k*d*log2(2*gamma1+1)  (Stage-4 erratum E9-2)."""
+    """H_inf(w) >= k*d*log2(2*gamma1+1)."""
     return fs["k"] * fs["d"] * math.log2(2 * fs["gamma1"] + 1)
 
 # ---------------- ring arithmetic --------------------------------------------
-# [Stage-6 P0 性能优化·Opt1] polymul 增加 numpy int64 快路径（数学等价实现）：
-# np.convolve 整数卷积 + 负循环折叠 + %q，与下方 schoolbook 逐位相同（整数精确
-# 运算，无舍入）。溢出守卫：|a|∞·|b|∞·d < 2^62 方走 int64（本包最坏组合
-# q≈2^23 与 γ₁≈2^17 → 256·2^23·2^17=2^48 ≪ 2^62）；超界或无 numpy 时回退
-# 纯 Python 原实现。等价性证据 = Stage6 03号（字节级 identity 测试 + 回归）。
-# 先例：commit_as.py（C2 层）自 Stage-5 起即用同型 np.convolve int64。
+# polymul has a NumPy int64 fast path (mathematically equivalent):
+# np.convolve integer convolution + negacyclic fold + %q, identical to the
+# schoolbook loop below (exact integer arithmetic, no rounding). Overflow
+# guard: only takes the int64 path when |a|inf·|b|inf·d < 2^62 (worst case
+# in this package: q≈2^23 and γ₁≈2^17 → 256·2^23·2^17 = 2^48 ≪ 2^62);
+# otherwise, or when NumPy is missing, it falls back to pure Python.
+# commit_as.py (C2 layer) uses the same np.convolve int64 pattern.
 try:
     import numpy as _np
 except ImportError:                                    # pragma: no cover
@@ -277,8 +277,8 @@ def c_decode(buf, tau, d=256):
 
 # ---------------- CSPRNG wrapper ---------------------------------------------
 class SysRng:
-    """Default CSPRNG (secrets). Deterministic rng is test-only and must be
-    passed explicitly (Step2B-2 discipline)."""
+    """Default CSPRNG (secrets). A deterministic rng is test-only and must
+    be passed explicitly — production code never defaults to it."""
     def __init__(self):
         import secrets
         self._rng = secrets.SystemRandom()

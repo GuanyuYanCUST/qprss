@@ -1,39 +1,52 @@
-r"""HL7 FHIR 字段规范编码（2B-2 任务四 → 17号 最终补丁）。
+r"""HL7 FHIR field canonical encoding.
 
-分层声明：
-- 固定 32 B 合成字段测试（test_all/test_2b1/test_2b2）= **安全回归层**，继续保留；
-- 本模块 = **真实编码层**：从 FHIR 文档按路径提取子对象，canonical_json 规范化为
-  确定性字节串，作为 y_j 进入 Signing/Verify——签名与验证使用完全相同的字节表示；
-- 数据：手写合规 FHIR R4 示例（无任何真实 PHI）+ Synthea 合成 bundle（正式实验，
-  全合成患者、无 PHI；真实/脱敏数据集若引入须重走合规审查）。
+Layering:
+- the fixed 32 B synthetic-field tests are the security regression layer and
+  stay;
+- this module is the real encoding layer: extract the sub-object from a FHIR
+  document by path, normalize it to deterministic bytes with canonical_json,
+  and feed those as y_j into Signing/Verify — signing and verification use
+  exactly the same byte representation;
+- data: hand-written compliant FHIR R4 examples (no real PHI anywhere) plus
+  a Synthea synthetic bundle for the formal experiments (fully synthetic
+  patients, no PHI; introducing real/de-identified datasets would need a
+  fresh compliance review).
 
-规范化 = RFC 8785 (JCS) 的**显式安全子集**（17号 §3）：不是"未实现 JCS"，
-而是经证明在本子集内与 JCS 逐字节一致的受限方言：
+The normalization is an explicitly safe subset of RFC 8785 (JCS) — not "JCS
+unimplemented", but a restricted dialect proven byte-identical to JCS within
+the subset:
   json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-与完整 JCS 的全部差异点（及本实现的处置）：
-  1. 键排序：JCS 按 UTF-16 码元序，Python 按码点序——仅当键含增补平面字符
-     （>U+FFFF）与某些 BMP 字符（–￿）共存时分歧 → 子集**禁止非 BMP 键**
-     （validate_jcs_safe 拒绝；测试演示真实分歧例）。
-  2. 数字：JCS=ECMAScript IEEE-754 序列化（1.0→"1"，>2^53 失真）；
-     Python repr(37.0)="37.0" → 子集**禁止 float**；int 限 |v| ≤ 2^53−1（JS 安全整数）。
-  3. 字符串转义：两者对控制字符均用 \uXXXX/短转义、非 ASCII 原文输出——一致；
-     孤立代理项（lone surrogate）ECMAScript 保留、Python UTF-8 编码失败 → 子集禁止。
-  白名单内（str/int(≤2^53)/bool/None/list/dict + BMP 键 + 无孤立代理），
-  canonical_json ≡ JCS（逐字节；按上述逐条差异的排除法论证，17号 §3.2）。
+The full list of divergence points from real JCS, and how each is handled:
+  1. Key ordering: JCS sorts by UTF-16 code units, Python by code points —
+     they differ only when a key contains supplementary-plane characters
+     (> U+FFFF) mixed with certain BMP characters (–￿) → the subset FORBIDS
+     non-BMP keys (validate_jcs_safe rejects; a test demonstrates a real
+     divergence case).
+  2. Numbers: JCS uses ECMAScript IEEE-754 serialization (1.0 → "1", lossy
+     above 2^53); Python repr(37.0) = "37.0" → the subset FORBIDS floats;
+     ints are limited to |v| ≤ 2^53−1 (JS safe integers).
+  3. String escaping: both use \uXXXX/short escapes for control characters
+     and pass non-ASCII through raw — identical; lone surrogates are kept
+     by ECMAScript but fail Python's UTF-8 encoding → forbidden.
+Inside the whitelist (str / int(≤2^53) / bool / None / list / dict + BMP
+keys + no lone surrogates), canonical_json ≡ JCS byte for byte (by
+elimination over the divergence list above).
 """
 import json
 import struct
 
 from . import canon
 
-# ---------- 规范化提取 ----------
+# ---------- canonical extraction ----------
 
 _INT53 = (1 << 53) - 1
 
 
 def validate_jcs_safe(obj, path="$"):
-    """递归校验对象落在 JCS 安全子集内；越界抛 ValueError（指明路径）。
-    签名/验证两侧提取 y_j 前都必须调用——保证跨语言语义（17号 任务一(3)）。"""
+    """Recursively check that obj falls inside the JCS-safe subset; raise
+    ValueError (naming the path) on anything outside. Both the signing and
+    the verification side must call this before extracting y_j — it is what
+    makes the representation cross-language."""
     if isinstance(obj, bool) or obj is None:
         return True
     if isinstance(obj, int):
@@ -66,28 +79,32 @@ def validate_jcs_safe(obj, path="$"):
 
 
 def canonical_json(obj) -> bytes:
-    """确定性 JSON 字节串：排序键 + 紧凑分隔 + UTF-8（无空白/无转义差异）。
-    调用方须先 validate_jcs_safe（本模块 field_bytes_checked 已内置）。"""
+    """Deterministic JSON bytes: sorted keys + tight separators + UTF-8 (no
+    whitespace, no escaping ambiguity). Callers must run validate_jcs_safe
+    first (field_bytes_checked below does it for you)."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 def path_get(obj, path):
-    """path = 元组，元素为 dict 键（str）或 list 下标（int）。"""
+    """path = tuple of dict keys (str) or list indices (int)."""
     for k in path:
         obj = obj[k]
     return obj
 
 
 def field_bytes(doc, path) -> bytes:
-    """签名/验证共用的字段字节：y_j = canonical_json(doc[path])。
-    （不校验；正式路径用 field_bytes_checked。）"""
+    """Field bytes shared by signing and verification:
+    y_j = canonical_json(doc[path]). (No validation; use field_bytes_checked
+    on the real path.)"""
     return canonical_json(path_get(doc, path))
 
 
 def field_bytes_checked(doc, j: int, schema) -> bytes:
-    """按可信 schema 表提取：路径、声明类型、JCS 子集三重校验后规范化。
-    schema = [(j, path, ftype), ...]（17号 §2：类型取自可信表而非文档——
-    文档值类型错配即拒，防止攻击者用文档侧类型漂移绕过语义映射）。"""
+    """Extract per the trusted schema table: path, declared type, then JCS
+    subset validation, then canonicalize. schema = [(j, path, ftype), ...]
+    — the type comes from the trusted table, NOT from the document: a value
+    whose type mismatches is rejected, so an attacker cannot drift types
+    document-side to smuggle a different semantic mapping."""
     ent = dict((e[0], e) for e in schema)
     if j not in ent:
         raise ValueError(f"field {j} not in schema")
@@ -101,7 +118,7 @@ def field_bytes_checked(doc, j: int, schema) -> bytes:
     return canonical_json(v)
 
 
-# ---------- 手写合规 FHIR R4 示例（全虚构，无 PHI） ----------
+# ---------- hand-written compliant FHIR R4 example (fictional, no PHI) ----------
 
 EXAMPLE_BUNDLE = {
     "resourceType": "Bundle",
@@ -153,26 +170,28 @@ EXAMPLE_BUNDLE = {
     ],
 }
 
-# ---------- 可信 schema 表（17号 §2：j→path/type 映射的单一来源） ----------
-# ftype 取自 JCS 安全白名单；表本身是**可信配置**（部署：与 pk_RA 同级钉扎），
-# 其摘要 sd=canon.schema_digest(SCHEMA) 入 M_orig/M_reginit/序列化 v4。
+# ---------- trusted schema table (single source of the j→path/type map) ----------
+# ftype values come from the JCS-safe whitelist; the table itself is TRUSTED
+# CONFIGURATION (in a deployment it would be pinned alongside pk_RA), and its
+# digest sd = canon.schema_digest(SCHEMA) goes into M_orig/M_reginit and the
+# v4 serialization.
 
 SCHEMA = [
-    (1, ("entry", 0, "resource", "id"), "str"),                    # str 短
-    (2, ("entry", 0, "resource", "name"), "list"),                 # 嵌套 list[dict]
-    (3, ("entry", 0, "resource", "birthDate"), "str"),             # str 日期
+    (1, ("entry", 0, "resource", "id"), "str"),                    # short str
+    (2, ("entry", 0, "resource", "name"), "list"),                 # nested list[dict]
+    (3, ("entry", 0, "resource", "birthDate"), "str"),             # date str
     (4, ("entry", 0, "resource", "address"), "list"),              # list[dict]
     (5, ("entry", 0, "resource", "active"), "bool"),               # bool
-    (6, ("entry", 1, "resource", "code"), "dict"),                 # dict 深层
-    (7, ("entry", 1, "resource", "effectiveDateTime"), "str"),     # str 时间戳
-    (8, ("entry", 1, "resource", "valueQuantity"), "dict"),        # dict 数量
-    (9, ("entry", 1, "resource", "note"), "list"),                 # list[dict] 注释
-    (10, ("entry", 2, "resource", "medicationCodeableConcept"), "dict"),   # dict 概念
+    (6, ("entry", 1, "resource", "code"), "dict"),                 # deep dict
+    (7, ("entry", 1, "resource", "effectiveDateTime"), "str"),     # timestamp str
+    (8, ("entry", 1, "resource", "valueQuantity"), "dict"),        # quantity dict
+    (9, ("entry", 1, "resource", "note"), "list"),                 # list[dict] notes
+    (10, ("entry", 2, "resource", "medicationCodeableConcept"), "dict"),   # concept dict
     (11, ("entry", 2, "resource", "authoredOn"), "str"),           # str
-    (12, ("resourceType",), "str"),                                # 顶层 str
+    (12, ("resourceType",), "str"),                                # top-level str
 ]
 
-# 兼容 2B-2 T4 的旧视图（j → path）
+# legacy view (j → path), kept for the older test surface
 FIELD_PATHS = {j: p for (j, p, _) in SCHEMA}
 
 
@@ -180,13 +199,16 @@ def example_field_bytes(j: int) -> bytes:
     return field_bytes_checked(EXAMPLE_BUNDLE, j, SCHEMA)
 
 
-# ---------- Synthea 合成 FHIR（正式实验的真实格式数据层，17号 §5） ----------
+# ---------- Synthea synthetic FHIR (real-format data layer of the experiments) ----------
 
 def synthea_schema(bundle, n: int) -> list:
-    """从 Synthea bundle 构造 n 字段可信 schema：j→("entry",i,"resource",key)。
-    键在 ("resourceType", "status", "id") 间轮转（长度天然可变）；
-    只收 JCS 安全的标量 str 字段，缺失即跳过；类型声明 str（可信表定类型），
-    提取时逐字段 field_bytes_checked 复核（文档侧类型漂移即拒）。"""
+    """Build an n-field trusted schema from a Synthea bundle:
+    j → ("entry", i, "resource", key). Keys rotate over
+    ("resourceType", "status", "id") (naturally varying lengths); only
+    JCS-safe scalar str fields are taken, missing ones are skipped; the
+    declared type is "str" (the trusted table decides the type), and every
+    extraction goes through field_bytes_checked, so document-side type
+    drift is rejected on the spot."""
     ent = []
     j = 1
     keys = ("resourceType", "status", "id")

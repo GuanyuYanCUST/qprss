@@ -1,64 +1,57 @@
 # -*- coding: utf-8 -*-
-"""Stage-5.9 修复副本（Stage59_Patched）QPRSS 协议引擎。
+"""QPRSS protocol engine.
 
-基底 = RouteB_Stage5_冻结副本_20261013/src/s5（零改动引入），本副本只改
-安全语义两处（导师约束：冻结原件不动，修复走新副本+独立测试+重新冻结）：
+Three security-relevant deviations from the very first frozen version, each
+carried with its own verification tests:
 
-[P0.1 逐跳索引单调性] Verify 的 _check_hop_policy 增加首检
-    I_new ⊆ I_prev（V7.1，与论文 V7.1 对齐——原稿本有、Stage-5.7 压缩丢失、
-    冻结代码从未实现）；Redact 本地预检对偶增加 R0b。
-    修复对象：复活字段攻击（前删改者用旧合法开启经真实授权 hop 重插已删索引，
-    冻结实现 hist/snapshot/fresh/RA.register 全链接受——见
-    tests/test_p0_1_resurrection_repro.py frozen 模式实测记录）。
+[Index monotonicity per hop] _check_hop_policy opens with I_new ⊆ I_prev
+    (V7.1), and honest Redact has the dual local precheck R0b. Without it a
+    previous editor can replay an old legitimate opening through a genuinely
+    authorized hop to resurrect an already-deleted index — the original
+    implementation accepted that end to end (demonstrated by the
+    resurrection reproduction test).
 
-[P0.2 撤销与时间语义] revlist/ref_ts 调用方参数废除，替换为：
-    - RA.revoke(id16, eff_ts)：显式生效时间（与 e.ts 同一声明性墙钟域）；
-      已撤销者同时被 RA 登记门拒绝（register/register_initial 查撤销表）；
-    - RA.revocation_snapshot()：RA 签名的撤销快照（epoch + 逐 id eff_ts）；
-    - verify(..., revsnap=(msg, sig))：只接受 RA 签名快照——调用者自报的
-      撤销列表不再是可信输入（快照签名验证失败 = V5.3d 拒绝）；
-    - V5.3d-window：三模式一律执行记录内窗口一致性（e.ts ∈ [nb, na]，
-      数据全部来自记录本身，不依赖调用者时间源）；
-    - V5.3d-rev：提供 revsnap 时，拒绝"声称时间 ≥ 撤销生效时间"的 hop
-      （过去合法签署的记录不受其后撤销牵连——历史有效性 ≠ 当前授权）；
-    - require_revsnap=True：需要可信撤销数据而未提供时明确拒绝（不再静默
-      跳过却返回完整授权有效）。
-    时间语义表与 API 合同见 02_RA撤销与时间语义修复.md。
+[Revocation and time semantics] the caller-supplied revlist/ref_ts
+parameters are gone, replaced by:
+    - RA.revoke(id16, eff_ts): an explicit effective time in the same
+      declared wall-clock domain as e.ts; revoked identities are also
+      rejected at the RA registration gates;
+    - RA.revocation_snapshot(): an RA-signed snapshot (epoch + per-id
+      eff_ts);
+    - verify(..., revsnap=(msg, sig)): only RA-signed snapshots count — a
+      caller self-reported revocation list is not trusted input (bad
+      signature ⇒ V5.3d reject);
+    - V5.3d-window, all three modes: per-hop in-record window consistency
+      (e.ts ∈ [nb, na]; everything comes from the record itself, no caller
+      clock involved);
+    - V5.3d-rev, when a revsnap is supplied: hops claiming a time ≥ the
+      revocation effective time are rejected (records legitimately signed
+      earlier stay valid — historical validity ≠ current authorization);
+    - require_revsnap=True: refuse explicitly when trusted revocation data
+      is needed but missing, instead of silently returning full validity.
+    Adversarial re-review tightened this further: an epoch-domain
+    per-signer gate on registration (revoked signers could otherwise
+    backdate hops into the gazette/fresh head), mandatory monotone eff_ts,
+    epoch anchored into the response domain (M_resp3/M_gaz3) with stale
+    snapshots rejected, bidirectional field-table consistency at V1.2, and
+    truncation guards in parse_revsnap.
 
-[P0.2-r2 对抗复核修订（2026-10-14，16-agent 攻击/验证工作流 CONFIRMED 8 项）]
-    - RA.register 新增 R3-rev：epoch 域逐签署者门（只查新增 hop）——被撤销者
-      回填 ts 的 hop 原可经任一在权成员的登记混入公报/新鲜链头（red-h1-F1/
-      SECREV1-F1，critical）；
-    - RA.revoke eff_ts 必填 + 域校验 + 单调（red-h1-F2/SECREV1-F4/AUD-01/03：
-      缺省 0 是"追溯到纪元零"而非"立即生效"，且未校验输入可崩 revsnap）；
-    - verify 默认 require_revsnap：snapshot/fresh=True（SECREV1-F2：声称当前
-      授权却零撤销数据=任务书禁止的静默模式）；
-    - 锚定域绑定 epoch（M_resp3/M_gaz3）+ 过期 revsnap 拒绝（SECREV1-F3/
-      AUD-04：旧快照回放掩盖撤销）；
-    - verify V1.2 双向字段表一致（red-h1-F3：多余开启条目在 accept 对象上
-      残留复活内容）；
-    - RA.restore 旧快照 rev_eff 回填（AUD-02）；canon.parse_revsnap 截断守卫
-      （AUD-03）。
+[Signing-core XOF replay fix] the B1 path goes through s4compat (the
+original ShakeRng buffer concatenation replays the XOF stream from byte
+126 — see the header of s4compat.py).
 
-[P0.4 签名核 XOF 回放修复] B1 路径经 s5_sig 切换 s4compat（冻结
-s4_core.ShakeRng 缓冲拼接使 XOF 流自字节 126 起周期性回放——expand_A 的
-多项式条目带 p[42+k]==p[k] 重复结构、sample_in_ball 支撑分布偏离均匀球；
-见 s4compat.py 头注与 03号 §5）。
+Everything else — the V1–V9 numbering, serialization v5, RA registration
+semantics, Inv-W, tightening, the three verification modes, M_* canonical
+transcriptions from one source, schema_digest, SD-1 — matches the frozen
+version verbatim. The protocol layering: B1 = the C2 MLWE structured
+commitment (commit_as, C_j = G·r_j + D·H₂(j‖RID‖y_j) + η_j, q = 12289,
+k = m = 4, d = 256, ternary) plus the B1-65 custom
+Fiat–Shamir-with-aborts core; the comparison arms AS/C keep ML-DSA-44.
 
-其余（V1–V9 编号、序列化 v5、RA 登记语义、Inv-W、tighten、三模式、
-M_* 规范转录单一来源、schema_digest v4、SD-1）与冻结副本逐字一致。
-原 Stage-5 文档：在 Step2B 医疗协议骨架（2B-0/2B-1/2B-2/2B-3 全部 59 项
-测试验证的 V1–V9 语义）上换签名核：B1 = C2 MLWE 结构化承诺（commit_as 层，
-C_j=G·r_j+D·H₂(j‖RID‖y_j)+η_j，q=12289，k=m=4，d=256，三元）+ B1-65 自定义
-Fiat–Shamir-with-aborts（s4_fs，只读引入）；对照 AS/C 维持 ML-DSA-44。
-诚实声明：B1 签名随机化（CSPRNG 掩码）——Σ 字节不跨运行可复现；只有显式
-传入确定性 rng 才可复现，仅限测试。
+Honesty note: B1 signing is randomized (CSPRNG masks), so Σ bytes are not
+reproducible across runs; reproducibility requires an explicitly injected
+deterministic rng, which is test-only.
 """
-
-# [Stage-5.10.3 τ=64 候选] 本文件 = Stage-5.9 s5_qprss.py 副本（V1–V9、
-# P0.1 逐跳单调性、P0.2/r2 撤销语义全部原样携带——A9′-1/A9′-2 修复即在
-# 该两处）。本轮零语义改动：尺寸经 s5_sig.SIG_LEN 流动（B1 5,785→5,794），
-# 仅两处注释同步；文件头/docstring 的协议描述逐字保留。
 from __future__ import annotations
 
 import hashlib
@@ -90,7 +83,8 @@ class RedactRefused(Exception):
 
 
 def make_rng(seed: bytes):
-    """种子化测试 PRNG——仅限测试复现模式。正式接口用 secure_rng。"""
+    """Seeded test PRNG — test-reproduction mode only. Real interfaces use
+    secure_rng."""
     state = [0]
 
     def rng(n: int) -> bytes:
@@ -107,10 +101,11 @@ def secure_rng(n: int) -> bytes:
     return os.urandom(n)
 
 
-# ---------------- 证书 ----------------
+# ---------------- certificates ----------------
 
 class Cert:
-    """证书（RA 签发）。scheme 为证书所属签名核（'B1' 主方案；'AS'/'C' 对照）。"""
+    """Certificate (issued by the RA). scheme is the certificate's signing
+    core ('B1' = the paper's stack; 'AS'/'C' = comparison arms)."""
 
     def __init__(self, id16, pk, role: bytes, scope, nb: int, na: int, sig=b"",
                  scheme: str = "B1"):
@@ -141,20 +136,23 @@ class Superseded(Exception):
 
 
 class RA:
-    """注册机构：证书签发/撤销表/链头登记/FreshQuery/公报。
-    scheme 默认 'B1'（主方案全栈自定义格）；'AS'/'C' 对照栈用 ML-DSA-44 RA。
-    并发层级与 2B 相同：单进程 threading.Lock（进程内 CAS 仿真），不声称
-    跨进程一致/生产级崩溃安全。"""
+    """Registration authority: certificate issuance, revocation table,
+    chain-head registration, FreshQuery, gazette.
+    scheme defaults to 'B1' (the paper's full custom stack); the 'AS'/'C'
+    comparison stacks get an ML-DSA-44 RA. Concurrency is the same as the
+    prototype: a single-process threading.Lock (in-process CAS emulation) —
+    no cross-process consistency or production-grade crash safety claimed."""
 
     def __init__(self, scheme: str = "B1"):
         self.scheme = scheme
         core = s5_sig.core(scheme)
         self.sk, self.pk = core.keygen()
         self.revoked = set()
-        self.rev_eff = {}   # Stage-5.9：id16 -> eff_ts（撤销生效时间，e.ts 同域）
+        self.rev_eff = {}   # id16 -> eff_ts (revocation effective time, same
+                            # domain as e.ts)
         self.epoch = 0
         self.reg = {}       # rid -> {h, t, I, P, ver}
-        self.log = []       # 追加式登记日志
+        self.log = []       # append-only registration log
         self._lk = threading.Lock()
 
     def _sign(self, msg: bytes, ctx: bytes) -> bytes:
@@ -170,15 +168,20 @@ class RA:
         return c
 
     def revoke(self, id16, eff_ts: int = None):
-        """Stage-5.9（P0.2-r2 修订）：撤销带显式生效时间 eff_ts（与 e.ts 同一
-        声明性墙钟域）。语义：hop 声称时间 ≥ eff_ts ⟹ 撤销后授权（提供 revsnap
-        时验证侧拒绝）；hop 声称时间 < eff_ts ⟹ 撤销前签署（revsnap 下不牵连）。
+        """Revoke with an explicit effective time eff_ts (same declared
+        wall-clock domain as e.ts). Semantics: a hop claiming a time ≥ eff_ts
+        is post-revocation authorization (rejected when a revsnap is
+        supplied); a hop claiming < eff_ts was signed before revocation and
+        is not implicated.
 
-        eff_ts 必填（ValueError）：RA 在 e.ts 域没有可信时钟，"立即生效"无法
-        隐式表达——显式传 eff_ts=0 表示刻意作废该身份全部历史（revsnap 消费
-        下连已登记的撤销前 hop 也拒绝）；要保留历史，传 > 全部既往 hop 声明
-        ts 的 eff_ts。epoch 域的即时撤销由登记门（R1-rev/R3-rev/I1-rev）承担。
-        重复撤销不得降低已记录的 eff_ts（单调性）。"""
+        eff_ts is mandatory (ValueError otherwise): the RA has no trusted
+        clock in the e.ts domain, so "effective immediately" cannot be
+        expressed implicitly — passing eff_ts=0 deliberately voids the
+        identity's entire history (even already-registered pre-revocation
+        hops are rejected once a revsnap is consumed); to preserve history,
+        pass an eff_ts greater than every past hop's declared ts. Instant
+        revocation in the epoch domain is handled by the registration gates.
+        Re-revocation may not lower the recorded eff_ts (monotonic)."""
         if eff_ts is None:
             raise ValueError("eff_ts required: RA has no trusted clock in the "
                              "e.ts domain; pass explicit eff_ts (0 only as a "
@@ -198,16 +201,18 @@ class RA:
             return msg, self._sign(msg, canon.CTX_ANC)
 
     def revocation_snapshot(self):
-        """Stage-5.9：可信撤销状态快照（RA 签名，CTX_ANC）。verify 的 revsnap
-        参数只接受本产物——调用者自报的撤销列表不是可信输入。"""
+        """Trusted revocation-state snapshot (RA-signed, CTX_ANC). verify's
+        revsnap parameter accepts only this product — caller self-reported
+        revocation lists are not trusted input."""
         with self._lk:
             msg = canon.M_revsnap(self.epoch,
                                   [(i, self.rev_eff[i]) for i in sorted(self.revoked)])
             return msg, self._sign(msg, canon.CTX_ANC)
 
-    # ---- 登记状态（16号 §一–§四 最终版；语义与 2B 逐字一致） ----
+    # ---- registration state ----
     def register_initial(self, S0, cert_s: Cert, sig_init: bytes):
-        """RegisterInitial：signer 登记第零轮状态。先到者胜。"""
+        """RegisterInitial: the signer registers the round-zero state.
+        First writer wins."""
         with self._lk:
             rid, n = S0.rid, S0.n
             if cert_s.scheme != self.scheme:
@@ -215,7 +220,7 @@ class RA:
             if not cert_s.verify(self.pk) or cert_s.role != b"signer" \
                     or not ScopeMatchRID(cert_s.scope, rid):
                 raise RedactRefused("I1 bad signer cert")
-            if cert_s.id in self.revoked:                      # Stage-5.9：登记门查撤销
+            if cert_s.id in self.revoked:                      # registration gate checks revocation
                 raise RedactRefused("I1-rev signer revoked")
             m = canon.M_reginit(rid, n, S0.acc0, S0.P0, canon.H(cert_s.msg), sd=S0.sd)
             if not self._verify(cert_s.pk, m, sig_init, canon.CTX_REG):
@@ -223,7 +228,7 @@ class RA:
             if S0.log or S0.h_t != canon.h0_of(rid, n, S0.acc0, S0.P0, sd=S0.sd):
                 raise RedactRefused("I2 not a t=0 state")
             try:
-                verify({"pk_ra": self.pk}, S0, "hist")          # RA 充当完整验证者
+                verify({"pk_ra": self.pk}, S0, "hist")          # RA acts as the full verifier
             except VerifyReject as e:
                 raise RedactRefused(f"I2 full verify failed: {e}")
             if rid in self.reg:
@@ -233,7 +238,8 @@ class RA:
             return 0
 
     def register(self, S, sig_reg: bytes, cert_req: Cert):
-        """R1–R5：登记合法扩展；并发分叉=先到者胜，后到 Superseded。"""
+        """R1–R5: register a legal extension; concurrent forks race, first
+        writer wins, losers get Superseded."""
         with self._lk:
             rid = S.rid
             if rid not in self.reg:
@@ -241,7 +247,7 @@ class RA:
             st = self.reg[rid]
             if cert_req.scheme != self.scheme or not cert_req.verify(self.pk):
                 raise RedactRefused("R1 cert not RA-signed")
-            if cert_req.id in self.revoked:                    # Stage-5.9：登记门查撤销
+            if cert_req.id in self.revoked:                    # registration gate checks revocation
                 raise RedactRefused("R1-rev redactor revoked")
             t_new = len(S.log)
             if t_new <= st["t"]:
@@ -252,21 +258,24 @@ class RA:
                 raise RedactRefused("R1 σ_req invalid under authenticated pk (stale or forged)")
             if cert_req.role != b"signer" and not AuthMember(cert_req.role, cert_req.id, st["P"].adm):
                 raise RedactRefused("R1 not authorized under registered policy")
-            try:                                                    # Fix 4(i)：完整 V1–V8
+            try:                                                    # full V1–V8 verification
                 verify({"pk_ra": self.pk}, S, "hist")
             except VerifyReject as e:
                 raise RedactRefused(f"R3 full verify failed: {e}")
-            # P0.2-r2（red-h1-F1/SECREV1-F1）：epoch 域逐跳签署者门——只查
-            # 本次新增的 hop（S.log[st.t:]，已登记的撤销前 hop 不追溯）。
-            # 声明 ts 不可信（可回填），故忽略 ts、只认撤销表；否则被撤销者
-            # 回填 ts 的 hop 可经任一在权成员的登记混入公报/新鲜链头。
+            # Epoch-domain per-hop signer gate: only the NEWLY added hops are
+            # checked (S.log[st.t:]; already-registered pre-revocation hops
+            # are not retroactively implicated). The declared ts is untrusted
+            # (it can be backdated), so ts is ignored and only the revocation
+            # table counts — otherwise a revoked party's backdated hops could
+            # sneak into the gazette/fresh head through any still-authorized
+            # member's registration.
             for (_, _, cid_b) in S.log[st["t"]:]:
                 cert_b = S.certs.get(cid_b)
                 if cert_b is not None and cert_b.id in self.revoked:
                     raise RedactRefused(
                         "R3-rev: new hop signed by revoked identity "
                         "(declared ts is untrusted; epoch domain)")
-            h = canon.h0_of(rid, S.n, S.acc0, S.P0, sd=S.sd)          # Fix 4(ii)：前缀绑定（含 sd）
+            h = canon.h0_of(rid, S.n, S.acc0, S.P0, sd=S.sd)          # prefix binding (sd included)
             for (e_b, _, _) in S.log[: st["t"]]:
                 h = canon.hi_of(e_b, h)
             if h != st["h"]:
@@ -275,9 +284,10 @@ class RA:
             self.log.append((rid, S.h_t, t_new, st["ver"]))
             return st["ver"]
 
-    # ---- 最新性来源 ----
+    # ---- freshness sources ----
     def fresh_query(self, nonce: bytes, rid):
-        """P0.2-r2：响应绑定 RA.epoch（M_resp3）——验证器据以拒绝过期 revsnap。"""
+        """The response binds RA.epoch (M_resp3) — verifiers use it to
+        reject stale revsnaps."""
         with self._lk:
             st = self.reg.get(rid)
             if st is None:
@@ -288,7 +298,7 @@ class RA:
             return resp, st["h"], st["t"], ts, self.epoch
 
     def gazette(self, period: int, rid):
-        """P0.2-r2：公报绑定 RA.epoch（M_gaz3）——同上。"""
+        """The gazette binds RA.epoch (M_gaz3) — same purpose."""
         with self._lk:
             st = self.reg.get(rid)
             ts = int.from_bytes(hashlib.shake_256(b"gazts" + st["h"]).digest(4), "big")
@@ -296,7 +306,8 @@ class RA:
                                          self.epoch), canon.CTX_ANC)
             return g, st["h"], st["t"], ts, period, self.epoch
 
-    # ---- 状态持久化（进程重启连续性；非事务性，不声称生产级崩溃安全） ----
+    # ---- state persistence (cross-restart continuity; non-transactional,
+    # no production-grade crash safety claimed) ----
     def snapshot(self) -> bytes:
         with self._lk:
             reg = {rid.hex(): dict(h=st["h"].hex(), t=st["t"], ver=st["ver"], n=st["P"].n,
@@ -312,11 +323,13 @@ class RA:
     def restore(cls, blob: bytes):
         o = json.loads(blob)
         ra = cls.__new__(cls)
-        ra.scheme = o.get("scheme", "AS")          # 旧快照无 scheme 字段=2B 时代
+        ra.scheme = o.get("scheme", "AS")          # old snapshots without the
+                                                   # scheme field predate the
+                                                   # scheme split
         ra.pk, ra.sk = bytes.fromhex(o["pk"]), bytes.fromhex(o["sk"])
         ra.revoked = {bytes.fromhex(x) for x in o["revoked"]}
         ra.rev_eff = {bytes.fromhex(k): v for (k, v) in o.get("rev_eff", [])}
-        for x in ra.revoked:                       # P0.2-r2（AUD-02）：旧快照回填
+        for x in ra.revoked:                       # backfill for old snapshots
             ra.rev_eff.setdefault(x, 0)
         ra.epoch = o["epoch"]
         ra._lk = threading.Lock()
@@ -342,7 +355,8 @@ def _check_hop_cert(rid, i, hop, cert, h_prev, e_bytes, tau, pk_ra, scheme,
 
 
 def forge_hop(S, I_new, P_new: Policy, redactor: Cert, sk, ts: int, e_id=None):
-    """攻击者版 Redact：跳过全部本地预检（Redact 在攻击者手里无强制力）。"""
+    """Attacker's Redact: skips all local prechecks (Redact has no binding
+    force in the attacker's hands)."""
     n = S.n
     i = len(S.log) + 1
     cid = canon.H(redactor.msg)
@@ -367,11 +381,13 @@ def forge_hop(S, I_new, P_new: Policy, redactor: Cert, sk, ts: int, e_id=None):
 
 def _check_hop_policy(n, hop, cert, rid, removed, I_prev, P_prev, I_new, P_new):
     if not I_new <= I_prev:
-        # P0.1（Stage-5.9）：逐跳索引单调性——删改只许移除索引。缺失本检查时，
-        # 旧合法开启（静态见证对 acc0 验证）可经真实授权 hop 重插已删字段。
+        # Per-hop index monotonicity — redaction may only remove indices.
+        # Without this check, an old legitimate opening (a static witness
+        # verifying against acc0) can re-insert an already-deleted field
+        # through a genuinely authorized hop.
         raise VerifyReject("V7.1", "index resurrection: I_new ⊄ I_prev")
     if not removed:
-        raise VerifyReject("V7.1", "empty redaction J=∅")   # SD-1：空删除被禁
+        raise VerifyReject("V7.1", "empty redaction J=∅")   # SD-1: empty redactions are forbidden
     if not removed <= P_prev.w:
         raise VerifyReject("V7.2", "deleted non-whitelisted index")
     if not P_prev.K <= I_new:
@@ -392,10 +408,11 @@ def _check_hop_policy(n, hop, cert, rid, removed, I_prev, P_prev, I_new, P_new):
 class Sigma:
     def __init__(self, scheme, rid, n):
         assert scheme in ("B1", "AS", "C", "H")
-        self.scheme = scheme            # "B1"（主）| "AS" | "C"（对照）
+        self.scheme = scheme            # "B1" (main) | "AS" | "C" (comparison)
         self.rid, self.n = rid, n
-        self.sd = None                  # schema_digest（v4；None=未绑定语义映射）
-        self.acc0 = None                # 初态块
+        self.sd = None                  # schema digest (v4; None = semantic
+                                        # map not bound)
+        self.acc0 = None                # initial block
         self.P0 = None
         self.sigma0 = None
         self.cert_s = None
@@ -404,13 +421,16 @@ class Sigma:
         self.Pt = None
         self.h_t = None
         self.log = []                   # [(e_bytes, tau, certH)]
-        self.certs = {}                 # certH -> Cert（去重表）
-        self.anchor = None              # 仅 legacy 反例用
+        self.certs = {}                 # certH -> Cert (dedup table)
+        self.anchor = None              # legacy counterexamples only
 
-    # ---------- 序列化 v5（=2B v4 + scheme 字节 'B' 与按 scheme 长度分派） ----------
-    # flags bit0=含 Cert_S；bit1=v3+（enc32(j)‖enc32(len)‖y）；bit2=含 sd（48B）。
-    # B1：sigma0/tau=5,794 B（τ=64 候选）、证书内 pk=3,712 B、见证核 r‖η 2-bit=512 B（与 AS 同，
-    # 因承诺层同构 C2）。结构/顺序/编码与 2B v4 逐字段一致。
+    # ---------- serialization v5 (= v4 + scheme byte and per-scheme lengths) ----
+    # flags bit0 = Cert_S included; bit1 = v3+ (enc32(j)‖enc32(len)‖y);
+    # bit2 = sd included (48 B).
+    # B1: sigma0/tau = 5,794 B (τ=64), pk inside a certificate = 3,712 B,
+    # witness core r‖η 2-bit = 512 B (same as AS — the commitment layer is
+    # the isomorphic C2). Structure/order/encodings agree with v4 field by
+    # field.
 
     def serialize(self, include_cert_s=True) -> bytes:
         js = sorted(self.It)
@@ -441,7 +461,8 @@ class Sigma:
 
 
 class ASWitness:
-    """C2 承诺见证：(2-bit 打包 r‖η, Merkle 路径)。B1 与 AS 共用（同一承诺层）。"""
+    """C2 commitment witness: (2-bit packed r‖η, Merkle path). B1 and AS
+    share it (same commitment layer)."""
     __slots__ = ("packed", "path")
 
     def __init__(self, packed, path):
@@ -455,7 +476,7 @@ class ASWitness:
 
 
 class CWitness:
-    """基线 C 见证：(盐, Merkle 路径)。"""
+    """Baseline C witness: (salt, Merkle path)."""
     __slots__ = ("salt", "path")
 
     def __init__(self, salt, path):
@@ -471,9 +492,11 @@ class CWitness:
 # ---------------- Setup / Signing ----------------
 
 def setup(scheme: str = "B1", seed: bytes = None):
-    """参数生成。B1/AS：C2 承诺层 pp（G,D ∈ R_q^{4×4}，D 可逆真实检查+重采样，
-    系数拒绝采样精确均匀——2B-3 P0）；C：无代数 pp（盐+哈希）。
-    seed=None（正式）→ CSPRNG；固定 seed 仅测试复现。"""
+    """Parameter generation. B1/AS: commitment-layer pp (G,D ∈ R_q^{4×4},
+    D invertibility really checked + resampling on failure, coefficients
+    exactly uniform by rejection sampling); C: no algebraic pp (salt +
+    hash). seed=None (production) → CSPRNG; a fixed seed is for test
+    reproduction only."""
     assert scheme in ("B1", "AS", "C", "H")
     if scheme in ("C", "H"):
         cfg_pp["G"], cfg_pp["D"] = None, None
@@ -487,9 +510,10 @@ def setup(scheme: str = "B1", seed: bytes = None):
 
 def signing(pp, sk_s, cert_s, rid, ys: dict, P0: Policy, rng=None,
             schema_digest=None, sig_rng=None) -> Sigma:
-    """原始医生签名。ys: j -> y(bytes)（FHIR canonical_json 产物）。
-    rng：承诺随机带（None=secure_rng）；sig_rng：B1 签名掩码 rng（None=CSPRNG；
-    显式确定性 rng 仅测试复现模式）。"""
+    """Origin (physician) signature. ys: j -> y(bytes) (FHIR canonical_json
+    output). rng: commitment randomness (None = secure_rng); sig_rng: B1
+    signature-mask rng (None = CSPRNG; an explicit deterministic rng is
+    test-reproduction mode only)."""
     if rng is None:
         rng = secure_rng
     scheme = pp["scheme"]
@@ -527,15 +551,17 @@ def signing(pp, sk_s, cert_s, rid, ys: dict, P0: Policy, rng=None,
 
 def redact(pp, S: Sigma, I_new, P_new: Policy, redactor: Cert, sk_r, ts: int,
            *, legacy=False, sig_rng=None):
-    """诚实 Redact（本地预检 R0/R0b/R1–R6（R0b=Stage-5.9 复活对偶））。"""
+    """Honest Redact (local prechecks R0/R0b/R1–R6; R0b is the resurrection
+    dual)."""
     n = S.n
     removed = S.It - set(I_new)
     if not set(I_new) <= S.It:
-        # P0.1（Stage-5.9）：诚实 Redact 的对偶预检——新索引集只许是当前索引
-        # 集的子集（V7.1 的签名端对偶；攻击者可绕过本地预检，故 Verify 侧同检）。
+        # Honest Redact's dual precheck: the new index set may only be a
+        # subset of the current one (the signer-side dual of V7.1; an
+        # attacker can bypass local prechecks, so Verify checks it too).
         raise RedactRefused("R0b index resurrection (I_new ⊄ I_t)")
     if not removed:
-        raise RedactRefused("R0 empty redaction (J=∅)")   # SD-1：与 V7.1 对偶
+        raise RedactRefused("R0 empty redaction (J=∅)")   # SD-1: dual of V7.1
     if not removed <= S.Pt.w:
         raise RedactRefused("R1 removed ⊄ W")
     if not S.Pt.K <= set(I_new):
@@ -571,7 +597,7 @@ def redact(pp, S: Sigma, I_new, P_new: Policy, redactor: Cert, sk_r, ts: int,
     return S2
 
 
-# ---------------- e / 证书解析 ----------------
+# ---------------- e / certificate parsing ----------------
 
 def dec_encP(buf, off, n):
     adm_len = buf[off]
@@ -621,8 +647,9 @@ def dec_e(e_bytes, n):
 
 
 def dec_cert_at(buf, off, scheme):
-    """解析证书字节（sig ‖ msg）；返回 (Cert, 结束偏移)。重编码必须逐字节一致。
-    sig/pk 长度按 scheme 分派（B1: 5,785/3,712；AS/C: 2,420/1,312）。"""
+    """Parse certificate bytes (sig ‖ msg); returns (Cert, end offset).
+    Re-encoding must be byte-identical. sig/pk lengths dispatch on scheme
+    (B1: 5,785/3,712; AS/C: 2,420/1,312)."""
     p = off
     sig = buf[p:p + SIG[scheme]]
     p += SIG[scheme]
@@ -657,8 +684,9 @@ def dec_cert_at(buf, off, scheme):
 
 
 def parse_sigma(data: bytes):
-    """反序列化 + 分节核算。返回 (Sigma, sections=[(名称, 起, 止)])。
-    偏移全部来自真实字节流解析位置（实测口径，非公式）。"""
+    """Deserialize + section accounting. Returns (Sigma, sections =
+    [(name, start, stop)]). Offsets all come from real parse positions in
+    the byte stream (measured, not formulaic)."""
     sec = []
     lam = len(canon.H(b""))
     rid = data[0:16]
@@ -674,7 +702,7 @@ def parse_sigma(data: bytes):
     u_cnt = struct.unpack(">I", data[30:34])[0]
     p = 34
     sd = None
-    if data[21] & 4:                                # v4：可选 schema_digest
+    if data[21] & 4:                                # v4: optional schema digest
         if p + lam > len(data):
             raise ValueError("schema digest truncated")
         sd = data[p:p + lam]
@@ -682,7 +710,7 @@ def parse_sigma(data: bytes):
     acc0 = data[p:p + lam]
     p += lam
     P0, p = dec_encP(data, p, n)
-    p += (n + 7) // 8                                    # I₀ 位图（验证时重导出）
+    p += (n + 7) // 8                                    # I₀ bitmap (re-derived at verify)
     Pt, p = dec_encP(data, p, n)
     h_t = data[p:p + lam]
     p += lam
@@ -696,7 +724,7 @@ def parse_sigma(data: bytes):
     if incl:
         S.cert_s, p = dec_cert_at(data, p, scheme)
         sec.append(("cert_s", sec[-1][2], p))
-    # idx+y 块（v3+：enc32(j)‖enc32(len)‖y，可变长）
+    # idx+y block (v3+: enc32(j)‖enc32(len)‖y, variable length)
     y_off = p
     js, ys = [], []
     for _ in range(r_cnt):
@@ -704,15 +732,15 @@ def parse_sigma(data: bytes):
         js.append(j)
         ys.append(y)
     sec.append(("fields:idx+y", p, y_off))
-    # 见证核心块（B1/AS=2-bit 打包 r‖η 512 B；C=盐 32 B）
+    # witness-core block (B1/AS = 2-bit packed r‖η 512 B; C = salt 32 B)
     core_len = WITNESS_CORE[scheme]
     w_off = y_off + r_cnt * core_len
     sec.append(("fields:witness-core", y_off, w_off))
-    # Merkle 路径块
+    # Merkle path block
     depth = (n - 1).bit_length()
     p_off = w_off + r_cnt * depth * lam
     sec.append(("fields:merkle-path", w_off, p_off))
-    # e 块 + τ 块
+    # e block + τ block
     e_off = p_off
     hops = []
     for _ in range(t_cnt):
@@ -722,7 +750,7 @@ def parse_sigma(data: bytes):
     sec.append(("audit:e", p_off, e_off))
     tau_off = e_off + t_cnt * SIG[scheme]
     sec.append(("audit:tau", e_off, tau_off))
-    # 证书表块
+    # certificate table block
     c_off = tau_off
     certs = []
     for _ in range(u_cnt):
@@ -731,7 +759,7 @@ def parse_sigma(data: bytes):
         c_off = c_end
     sec.append(("certs", tau_off, c_off))
     assert c_off == len(data), f"trailing bytes: {len(data) - c_off}"
-    # 组装
+    # reassemble
     for k, j in enumerate(js):
         path = [data[w_off + (k * depth + d) * lam: w_off + (k * depth + d + 1) * lam]
                 for d in range(depth)]
@@ -752,35 +780,43 @@ def parse_sigma(data: bytes):
 def verify(cfg, S: Sigma, mode="hist", *, ra=None, nonce=None, gazettes=None,
            legacy_selfverify=False, legacy_no_invw=False, legacy_presented_anchor=False,
            revsnap=None, require_revsnap=None, expected_sd=None, legacy_no_sd=False):
-    """cfg = {"pk_ra": bytes}（+ 模块级 cfg_pp，setup 时设置）。
-    V1–V9 与冻结副本一致（除下述 Stage-5.9 撤销/时间语义）；签名核按
-    S.scheme 分派。返回 accept_*；非法抛 VerifyReject(step)。
+    """cfg = {"pk_ra": bytes} (+ the module-level cfg_pp set by setup).
+    V1–V9 follow the frozen copy (except the revocation/time semantics
+    below); the signing core dispatches on S.scheme. Returns accept_*;
+    malformed input raises VerifyReject(step).
 
-    Stage-5.9 撤销与时间语义（P0.2，r2 修订）：
-    - revsnap = (msg, sig)：必须是 RA.revocation_snapshot() 的产物——
-      签名经 pk_ra 验证，否则 V5.3d 拒绝（调用者自报撤销列表不可信）；
-    - V5.3d-window（三模式一律）：每跳声明 ts ∈ [cert.nb, cert.na]
-      （记录内一致性，全部数据来自记录本身）；
-    - V5.3d-rev（提供 revsnap 时）：声明 ts ≥ eff_ts 的 hop 被拒
-      （撤销后授权）；声明 ts < eff_ts 的 hop 不受其后撤销牵连
-      （历史有效性 ≠ 当前授权——三模式一致语义）；
-    - require_revsnap 默认 None → snapshot/fresh 为 True、hist 为 False：
-      声称当前授权的模式缺可信撤销状态即 V5.3d 拒绝（不静默返回完整
-      授权有效）；hist 合同本就不含当前授权声明，保持允许。显式传
-      False/False 可覆盖（调用者自担语义）；
-    - 过期快照（P0.2-r2，SECREV1-F3）：fresh/snapshot 锚（M_resp3/M_gaz3）
-      携带 RA.epoch；revsnap 的 epoch < 锚 epoch ⟹ V5.3d 拒（旧快照
-      回放掩盖撤销）。legacy v2 锚无 epoch 可比对（legacy 语义保留）；
-    - snapshot/fresh 的当前性防线 = RA 登记门（R1-rev 登记者 + R3-rev
-      新增 hop 逐签署者，epoch 域）+ 链头锚定（未登记分叉到不了 V9）
-      + revsnap（ts 域，纵深防御）。
+    Revocation and time semantics:
+    - revsnap = (msg, sig): must be a product of RA.revocation_snapshot()
+      — the signature is verified under pk_ra, else V5.3d rejects
+      (caller-self-reported revocation lists are not trusted);
+    - V5.3d-window (all three modes): each hop declares ts ∈ [cert.nb,
+      cert.na] (in-record consistency; every input comes from the record
+      itself);
+    - V5.3d-rev (when revsnap is supplied): hops with declared ts ≥ eff_ts
+      are rejected (post-revocation authorization); hops with ts < eff_ts
+      are unaffected by a later revocation (historical validity ≠ current
+      authorization — consistent semantics across the three modes);
+    - require_revsnap defaults to None → True for snapshot/fresh, False
+      for hist: a mode claiming current authorization must be given
+      trusted revocation state, else V5.3d rejects (never silently
+      returns full-authorization-valid); the hist contract makes no
+      current-authorization claim, so it stays permitted. Passing an
+      explicit True/False overrides (caller owns the semantics);
+    - stale snapshots: fresh/snapshot anchors (M_resp3/M_gaz3) carry
+      RA.epoch; revsnap epoch < anchor epoch ⟹ V5.3d rejects (an old
+      snapshot replayed to mask revocations). Legacy v2 anchors carry no
+      epoch to compare against (legacy semantics retained);
+    - the currency defenses of snapshot/fresh = the RA registration gate
+      (R1-rev on the registrant + R3-rev per signer on new hops, epoch
+      domain) + chain-head anchoring (an unregistered fork never reaches
+      V9) + revsnap (ts domain, defense in depth).
     """
     n, rid = S.n, S.rid
     pk_ra = cfg["pk_ra"]
     core = s5_sig.core(S.scheme)
 
-    if require_revsnap is None:               # P0.2-r2（SECREV1-F2）：
-        require_revsnap = mode in ("snapshot", "fresh")   # 当前性声明需撤销状态
+    if require_revsnap is None:               # default on for currency modes:
+        require_revsnap = mode in ("snapshot", "fresh")   # they need revocation state
     rev_policy, rv_epoch = None, None
     if revsnap is not None:
         rv_msg, rv_sig = revsnap
@@ -826,13 +862,16 @@ def verify(cfg, S: Sigma, mode="hist", *, ra=None, nonce=None, gazettes=None,
         raise VerifyReject("V2.2", "sigma0 invalid")
     h = canon.h0_of(rid, n, S.acc0, S.P0, sd=S.sd)
 
-    # V3/V4 承诺与 Merkle（B1/AS 同一 C2 承诺层；C 盐+哈希）
-    # P0.2-r2（red-h1-F3）：字段表与保留索引集双向一致——多余条目（含已删
-    # 字段的合法开启）使 in-process 消费者在 accept 后读到复活内容，拒。
+    # V3/V4 commitments and Merkle (B1/AS share the C2 commitment layer;
+    # C = salt + hash)
+    # Field table and retained-index set must agree in both directions —
+    # extra entries (including legitimately disclosed already-deleted
+    # fields) let an in-process consumer read resurrected content after
+    # accept; reject.
     if not set(S.fields) <= S.It:
         raise VerifyReject("V1.2", "fields table contains non-retained indices")
     for j in sorted(S.It):
-        if j not in S.fields:                    # Stage-5.9：缺开启的畸形 Σ 干净拒绝
+        if j not in S.fields:                    # malformed Σ missing a disclosure: clean reject
             raise VerifyReject("V1.2", f"missing opening for retained field {j}")
         y, w = S.fields[j]
         if S.scheme in ("B1", "AS"):
@@ -847,7 +886,7 @@ def verify(cfg, S: Sigma, mode="hist", *, ra=None, nonce=None, gazettes=None,
         if not ok or root != S.acc0:
             raise VerifyReject("V4", f"merkle path field {j}")
 
-    # V5/V6/V7 逐跳
+    # V5/V6/V7 per hop
     I_prev_state, P_state = set(range(1, n + 1)), S.P0
     used_certs = set()
     for i, (e_bytes, tau, cid) in enumerate(S.log, start=1):
@@ -862,12 +901,15 @@ def verify(cfg, S: Sigma, mode="hist", *, ra=None, nonce=None, gazettes=None,
         _check_hop_cert(rid, i, hop, cert, h, e_bytes, tau, pk_ra, S.scheme,
                         selfverify=legacy_selfverify)
         used_certs.add(cid)
-        # V5.3d-window：记录内窗口一致性（声明 ts ∈ [nb, na]，三模式一律；
-        # 全部输入来自记录本身，不依赖调用者时间源）。
+        # V5.3d-window: in-record window consistency (declared ts ∈ [nb, na],
+        # all modes alike; every input comes from the record itself, no
+        # reliance on the caller's clock).
         if not (cert.nb <= hop["ts"] <= cert.na):
             raise VerifyReject("V5.3d-window", "hop declared ts outside cert window")
-        # V5.3d-rev：可信撤销快照下，声明时间 ≥ 生效时间的 hop 被拒；
-        # 之前的 hop（ts < eff_ts）不受其后撤销牵连（历史有效性 ≠ 当前授权）。
+        # V5.3d-rev: under a trusted revocation snapshot, hops with declared
+        # time ≥ effective time are rejected; earlier hops (ts < eff_ts) are
+        # not implicated by a later revocation (historical validity ≠
+        # current authorization).
         if rev_policy is not None:
             for (rev_id, eff_ts) in rev_policy:
                 if cert.id == rev_id and hop["ts"] >= eff_ts:
@@ -894,7 +936,7 @@ def verify(cfg, S: Sigma, mode="hist", *, ra=None, nonce=None, gazettes=None,
     if used_certs != set(S.certs.keys()):
         raise VerifyReject("V1.1", "cert table not exactly referenced")
 
-    # V8 终态
+    # V8 final state
     if P_state.adm != S.Pt.adm or P_state.w != S.Pt.w or P_state.d != S.Pt.d:
         raise VerifyReject("V8", "Pt mismatch")
     if S.It != I_prev_state:
@@ -913,7 +955,7 @@ def verify(cfg, S: Sigma, mode="hist", *, ra=None, nonce=None, gazettes=None,
             if not core.verify(pk_ra, canon.M_resp(b"", rid, a_h, a_t, a_ts), a_sig,
                                canon.CTX_ANC):
                 raise VerifyReject("V9", "legacy anchor sig")
-            anchor_epoch = None                   # v2 锚无 epoch（legacy 语义）
+            anchor_epoch = None                   # v2 anchors carry no epoch (legacy)
         else:
             if ra is None or nonce is None:
                 raise VerifyReject("V9", "fresh requires RA query + nonce")
@@ -947,4 +989,4 @@ def verify(cfg, S: Sigma, mode="hist", *, ra=None, nonce=None, gazettes=None,
     raise ValueError(mode)
 
 
-cfg_pp = {"G": None, "D": None}   # 模块级 pp（Verify V3 需要 G/D；原型单套参数）
+cfg_pp = {"G": None, "D": None}   # module-level pp (Verify V3 needs G/D; single parameter set)

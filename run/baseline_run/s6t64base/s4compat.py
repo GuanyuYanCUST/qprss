@@ -1,37 +1,40 @@
 # -*- coding: utf-8 -*-
-"""Stage-5.9 P0.4：冻结 s4_core.ShakeRng XOF 回放缺陷修复（兼容层）。
+"""Compatibility layer: fixes the XOF replay defect of the original
+ShakeRng used by the first implementation of the B1 core.
 
-缺陷（2026-10-14 于 03号模拟器统计验证中发现，实证见
-tests/test_s59_thm1_thm5_executable.py T0）：
-  s4_core.ShakeRng._take 在缓冲耗尽时执行
+The defect (caught by statistical validation of the simulator):
+  ShakeRng._take refilled its buffer with
       self._buf = self._buf[:self._pos] + self._h.digest(self._pos//64*64 + 128)
-  hashlib shake 的 digest(k) 永远返回 XOF 流的前 k 字节——拼接把
-  XOF[0:...] 追加到已消费前缀之后，导致流在每次 refill（首个在字节 126）
-  从头回放。后果（实测）：
-  - 边缘分布仍均匀（每次回放块本身是均匀 SHAKE 输出）⇒ 所有边缘统计通过；
-  - 抽样间出现循环相关 ⇒ 签名内 z 极值被抑制（max|z| 分布系统性偏低）；
-  - **生产路径受影响**：expand_A(seed) 的每个多项式条目 p 满足
-    p[42+k]==p[k]（k=0..21 实测）——公钥矩阵 A 并非论文所称拒绝均匀，
-    而是带重复结构；sample_in_ball 内部 RNG 消耗 >126B 亦触发回放，
-    挑战 c 的支撑分布偏离均匀球。s/e（生产走 SysRng=secrets）与
-    H1_challenge（单次 digest，无流式消费）不受影响。
+  but hashlib shake's digest(k) always returns the FIRST k bytes of the XOF
+  stream — the concatenation appended XOF[0:...] after the already-consumed
+  prefix, so the stream replayed from the start at every refill (the first
+  at byte 126). Consequences, as measured:
+  - marginal distributions stay uniform (each replayed block is itself
+    uniform SHAKE output) ⇒ every marginal-statistics test passes;
+  - cyclic correlations appear between draws ⇒ the per-signature z extrema
+    are suppressed (max|z| runs systematically low);
+  - the production path is affected: every polynomial entry p of
+    expand_A(seed) satisfies p[42+k] == p[k] for k = 0..21 — the public
+    matrix A is NOT rejection-uniform as claimed but carries repeated
+    structure; sample_in_ball also replays once its internal RNG consumes
+    more than 126 bytes, skewing the challenge support off the uniform
+    ball. s/e (production uses SysRng = secrets) and H1_challenge (single
+    digest, no streaming) are unaffected.
 
-修复语义：digest 是前缀一致的——正确做法是每次直接用更长的 digest
-整体替换缓冲，不与旧前缀拼接。本模块以 FixedXofRng 实现该语义，并
-按 s4_fs 的逐字算法（拒绝规则、编码、域分隔全部不变）重建
-expand_A / keygen / sign / sim_sign / verify 路径。输出编码不变
-（SIG_LEN/PK_LEN/序列化逐字段一致）——仅随机流的连续性语义修复。
-
-导师约束合规：冻结原件（s4_core.py / s4_fs.py / Stage-5/5.6/5.8 副本）
-零改动；本修复走 Stage59_Patched 新副本 + 独立测试 + 冻结候选更新
-（FREEZE-CANDIDATE-MANIFEST.json）。E1–E7 正式实验必须在导师确认
-本候选后以本路径执行。
+Fix semantics: digest is prefix-consistent — the buffer must be replaced
+wholesale by a longer digest, never concatenated with the old prefix. This
+module implements that semantics as FixedXofRng and rebuilds the
+expand_A / keygen / sign / sim_sign / verify paths following the original
+algorithm verbatim (rejection rules, encodings and domain separation all
+unchanged). Output encodings are unchanged (SIG_LEN/PK_LEN and the
+serializations agree field by field) — only the continuity semantics of
+the random stream are fixed.
 """
 
-# [Stage-5.10.3 τ=64 候选] 本文件 = Stage-5.9 s4compat.py（冻结候选 sha256
-# bf9da11c…）的副本，唯一改动 = 三处绝对导入 s4_core/s4_fs 改为相对导入
-# .s4dep_core/.s4dep_fs（τ=64 参数依赖随包携带，杜绝静默导入冻结 τ=39 模块）。
-# FixedXofRng 与全部算法逐字不变。
+# Copy of the compatibility layer with the τ=64 parameter dependency carried
+# in-package: the absolute imports of s4_core/s4_fs became relative imports
+# of .s4dep_core/.s4dep_fs, so this package can never silently pick up an
+# external frozen parameter module. FixedXofRng and all algorithms verbatim.
 from __future__ import annotations
 
 import hashlib
@@ -39,21 +42,23 @@ import hashlib
 from .s4dep_core import (FS, SysRng, polymul, vadd, mat_vec, vec_scal, center,
                         pack_signed, unpack_signed, c_encode, c_decode, shake_xof)
 
-DOM = b"QPRSS-FS-B165"          # 与 s4_fs.DOM 逐字一致
+DOM = b"QPRSS-FS-B165"          # identical to s4dep_fs.DOM
 
 
 class FixedXofRng:
-    """前缀一致 XOF 消费的确定性 RNG（ShakeRng 接口 + 修复语义）。
+    """Deterministic RNG with prefix-consistent XOF consumption (the
+    ShakeRng interface with the fixed semantics).
 
-    shake_256.digest(k) 总是 XOF[0:k]；_take(n) 取 XOF[off:off+n] 后推进
-    off——永不回放。below/range 语义与 s4_core 逐字一致（拒绝采样、含端点）。
+    shake_256.digest(k) is always XOF[0:k]; _take(n) returns XOF[off:off+n]
+    and advances off — no replay, ever. below/range keep the original
+    semantics verbatim (rejection sampling, inclusive endpoints).
 
-    [Stage-6 P0 性能优化·Opt2] _take 增加几何增长的块缓冲（数学等价实现）：
-    digest 仍是前缀一致（同一 XOF 流），仅把"每调用全前缀重挤"改为按
-    max(8192, 2·off) 几何窗口重挤——总挤取量摊还 O(n)（≤2× 流长 + 8KiB）。
-    输出字节流与逐调用 digest(off+n)[off:] 完全相同（等价性证据 = Stage6
-    03号流逐字节 identity 测试 + 回归套件）。冻结件 s4dep_core.ShakeRng
-    （回放缺陷历史对照件）保持逐字不动。
+    _take uses a geometrically growing block buffer, which is a
+    mathematically equivalent implementation: the stream of output bytes is
+    byte-for-byte identical to digest(off+n)[off:] per call (verified by a
+    stream identity test), it just avoids re-squeezing the whole prefix on
+    every call — total squeezing is amortized O(n) (≤ 2× stream length
+    + 8 KiB).
     """
 
     def __init__(self, *material):
@@ -65,7 +70,7 @@ class FixedXofRng:
         self._h = h
         self._off = 0
         self._buf = b""
-        self._bpos = 0                      # 缓冲内读指针（与 _off 同步推进）
+        self._bpos = 0                      # read pointer inside the buffer
 
     def _take(self, n: int) -> bytes:
         if len(self._buf) - self._bpos < n:
@@ -87,23 +92,27 @@ class FixedXofRng:
             if v < lim:
                 return v % n
 
-    def range(self, lo: int, hi: int) -> int:          # 含双端
+    def range(self, lo: int, hi: int) -> int:          # inclusive both ends
         return lo + self.below(hi - lo + 1)
 
 
-# ---------------- patched expand_A / sample_in_ball（算法逐字同 s4_fs/s4_core） ----
+# ---------------- expand_A / sample_in_ball with the fixed RNG (algorithms
+# verbatim from s4dep_fs / s4dep_core) ---------------------------------------
 
-# [Stage-6 P0 性能优化·Opt3] expand_A 公开可复用数据缓存：A 由 pk 种子完全
-# 确定（确定性 XOF 展开），同一 seed 的 A 逐字节相同——缓存按 seed 复用，
-# 上限 256 项 FIFO。A 仅被只读消费（mat_vec/polymul 不原地修改；返回对象
-# 视为不可变共享），等价性 = 命中与未命中输出逐字节一致（Stage6 03号）。
-# 长链验证（同 RA/签发者/删改者 pk 逐跳重载）为主要受益方。
+# expand_A memoization: A is fully determined by the pk seed (deterministic
+# XOF expansion), so the same seed always yields the identical A — cache per
+# seed, FIFO-capped at 256 entries. A is only ever read (mat_vec/polymul do
+# not mutate; returned objects are treated as immutable and shared); a cache
+# hit and a miss produce byte-identical output. Long-chain verification
+# (reloading the same RA/signer/editor pks hop after hop) is the main
+# beneficiary.
 _A_CACHE = {}
 _A_CACHE_MAX = 256
 
 
 def expand_A(seed):
-    """A ∈ R_q^{k×m}——与 s4_fs.expand_A 相同的循环/拒绝规则，固定 RNG。"""
+    """A ∈ R_q^{k×m} — same loops and rejection rule as s4dep_fs.expand_A,
+    on the fixed RNG."""
     key = bytes(seed)
     hit = _A_CACHE.get(key)
     if hit is not None:
@@ -117,13 +126,14 @@ def expand_A(seed):
             row.append([rng.below(q) for _ in range(d)])
         A.append(row)
     if len(_A_CACHE) >= _A_CACHE_MAX:
-        _A_CACHE.pop(next(iter(_A_CACHE)))         # FIFO 淘汰
+        _A_CACHE.pop(next(iter(_A_CACHE)))         # FIFO eviction
     _A_CACHE[key] = A
     return A
 
 
 def sample_in_ball(seed_bytes, d, tau):
-    """确定性精确重量 τ 三元挑战（Fisher–Yates，FIPS 204 风格）——固定 RNG。"""
+    """Deterministic exact-weight-τ ternary challenge (Fisher–Yates, in the
+    FIPS 204 style) — on the fixed RNG."""
     rng = FixedXofRng(b"QPRSS-SampleInBall", seed_bytes)
     positions = list(range(d))
     for i in range(d - tau, d):
@@ -143,21 +153,24 @@ def sample_in_ball(seed_bytes, d, tau):
     return c
 
 
-# ---------------- 编码复用（与 A/c 展开无关，冻结实现逐字节一致） ----------------
+# ---------------- encodings reused as-is (independent of the A/c expansion;
+# byte-identical to the original implementation) ----------------
 from .s4dep_fs import (w_bytes, _z_norm_ok, sig_to_bytes, sig_from_bytes,
                        sk_to_bytes, pk_to_bytes, sk_from_bytes, to_mod)
 from .s4dep_core import unpack_bits
 
 
 def H1_challenge(dom, w, msg):
-    """与 s4_fs.H1_challenge 相同；挑战采样经固定 sample_in_ball。"""
+    """Same as s4dep_fs.H1_challenge; challenge sampling goes through the
+    fixed sample_in_ball."""
     seed = shake_xof(b"QPRSS-H1", dom, w_bytes(w), msg).digest(48)
     return sample_in_ball(seed, FS["d"], FS["tau"])
 
 
 def pk_from_bytes(buf):
-    """与 s4_fs.pk_from_bytes 相同；A 展开经固定 expand_A（同种子在冻结/固定
-    两路径下得到不同 A——跨模式验证 fail-closed 拒绝，无静默混用）。"""
+    """Same as s4dep_fs.pk_from_bytes; the A expansion goes through the
+    fixed expand_A (the same seed yields a DIFFERENT A on the pre-fix path —
+    cross-path verification fails closed, no silent mixing)."""
     seed = buf[:32]
     tflat = unpack_bits(buf[32:], FS["tbits"], FS["k"] * FS["d"])
     d = FS["d"]
@@ -166,9 +179,10 @@ def pk_from_bytes(buf):
 
 
 def keygen(rng=None):
-    """与 s4_fs.keygen 相同；A 经固定 expand_A。rng 需实现 below/range
-    （SysRng 或 FixedXofRng；传入冻结 ShakeRng 时其自身消费亦带回放缺陷，
-    测试请用 FixedXofRng）。"""
+    """Same as s4dep_fs.keygen; A via the fixed expand_A. rng must implement
+    below/range (SysRng or FixedXofRng; handing in the original ShakeRng
+    would reintroduce the replay defect in its own draws — use FixedXofRng
+    for deterministic tests)."""
     rng = rng or SysRng()
     seed = bytes(rng.below(256) for _ in range(32))
     q, d, m = FS["q"], FS["d"], FS["m"]
@@ -182,7 +196,8 @@ def keygen(rng=None):
 
 
 def sign(sk, pk, msg, rng=None, stats=None):
-    """与 s4_fs.sign 相同的拒绝采样循环（z-only 接受规则不变）。"""
+    """Same rejection-sampling loop as s4dep_fs.sign (z-only acceptance
+    rule unchanged)."""
     rng = rng or SysRng()
     q, d, g1 = FS["q"], FS["d"], FS["gamma1"]
     A = pk["A"] if "A" in pk else expand_A(pk["seed"])
@@ -201,7 +216,8 @@ def sign(sk, pk, msg, rng=None, stats=None):
 
 
 def verify(pk, msg, z1, z2, c, h1_override=None):
-    """与 s4_fs.verify 相同；A 展开经固定 expand_A。"""
+    """Same as s4dep_fs.verify; the A expansion goes through the fixed
+    expand_A."""
     if not _z_norm_ok(z1, z2):
         return False
     q, d = FS["q"], FS["d"]
@@ -216,8 +232,9 @@ def verify(pk, msg, z1, z2, c, h1_override=None):
 
 
 def sim_sign(pk, msg, rng=None):
-    """与 s4_fs.sim_sign 相同的编程式 FS 签名预言机模拟器（BBD'23 Thm3
-    Sign→Prog）；挑战经固定 sample_in_ball。"""
+    """Programming-style FS signing-oracle simulator, same as
+    s4dep_fs.sim_sign (Sign→Prog step of the FS security proof); the
+    challenge goes through the fixed sample_in_ball."""
     rng = rng or SysRng()
     q, d, g1, b = FS["q"], FS["d"], FS["gamma1"], FS["beta"]
     A = pk["A"] if "A" in pk else expand_A(pk["seed"])

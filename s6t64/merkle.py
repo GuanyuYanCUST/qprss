@@ -1,4 +1,4 @@
-"""固定 Merkle 树：N=2^⌈log₂n⌉ 叶，位置 j 固定，j>n 为填充叶。"""
+"""Fixed Merkle tree: N = 2^⌈log₂n⌉ leaves, position j fixed, j > n padded."""
 from math import ceil, log2
 
 from . import canon
@@ -6,7 +6,7 @@ from . import canon
 
 class MerkleTree:
     def __init__(self, leaf_hashes):
-        """leaf_hashes: 长度 N=2^k 的叶子哈希列表。"""
+        """leaf_hashes: list of N = 2^k leaf hashes."""
         self.N = len(leaf_hashes)
         assert self.N & (self.N - 1) == 0 and self.N > 0
         self.levels = [list(leaf_hashes)]
@@ -21,7 +21,7 @@ class MerkleTree:
         return self.levels[-1][0]
 
     def path(self, j0):
-        """j0: 0 基叶索引 → 兄弟哈希列表（叶→根）。"""
+        """j0: 0-based leaf index → sibling hashes, leaf → root."""
         idx = j0
         out = []
         for lvl in self.levels[:-1]:
@@ -31,7 +31,7 @@ class MerkleTree:
 
     @staticmethod
     def verify_path(leaf: bytes, j0: int, path, n_leaves: int) -> bool:
-        """按树大小 n_leaves 校验路径并返回（ok, root)。"""
+        """Check the path against the tree size; returns (ok, root)."""
         idx = j0
         cur = leaf
         for sib in path:
@@ -45,7 +45,7 @@ def pad_leaf(j: int) -> bytes:
 
 
 def make_tree(n: int, real_leaf):
-    """real_leaf(j) -> bytes，j=1..n；j>n 填充。"""
+    """real_leaf(j) -> bytes for j = 1..n; positions j > n are padded."""
     N = 1 << ceil(log2(max(n, 1)))
     leaves = [real_leaf(j) if j <= n else pad_leaf(j) for j in range(1, N + 1)]
     return MerkleTree(leaves)

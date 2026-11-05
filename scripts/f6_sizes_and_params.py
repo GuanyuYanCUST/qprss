@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
-"""F6 = 其余论文数字核对：σ=5,794B / pk=3,712B / sk=672B / 证书 9,572B /
-challenge 34B / 承诺维度 / Merkle 深度——全部由当前实现实测重出。
-第五章安全性估计（攻击成本）不属性能复测，保持原文（参数未变）。
+"""F6 = cross-checks the remaining paper numbers: sigma=5,794 B /
+pk=3,712 B / sk=672 B / certificate 9,572 B / challenge 34 B /
+commitment dimensions / Merkle depth - all re-measured from the current
+implementation. Chapter 5 security estimates (attack costs) are not a
+performance re-test and stay as published (parameters unchanged).
 """
 import hashlib
 import json
@@ -64,7 +66,7 @@ def main():
         "pk=3712": facts["pk_B"] == 3712,
         "cert=9572": facts["cert_signer_B"] == 9572
         and facts["cert_redactor_B"] == 9572,
-        "pol2 > pol1 (一般描述符更长)": facts["pol2_encoding_B"]
+        "pol2 > pol1 (general descriptor is longer)": facts["pol2_encoding_B"]
         > facts["pol1_encoding_B"],
     }
     for k, v in checks.items():
@@ -75,8 +77,10 @@ def main():
         json.dump(dict(facts=facts, checks=checks,
                        environment=dict(python=platform.python_version(),
                                         ts=time.strftime("%Y-%m-%dT%H:%M:%S")),
-                       notes=["第五章攻击成本估计保持原文（核心参数未变）",
-                              "全部尺寸由当前对齐实现实测"]),
+                       notes=["Chapter 5 attack-cost estimates kept as "
+                              "published (core parameters unchanged)",
+                              "all sizes measured from the current "
+                              "paper-aligned implementation"]),
                   f, ensure_ascii=False, indent=1)
     assert all(checks.values())
     print(f"\nF6_DONE json={out}")

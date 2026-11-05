@@ -1,7 +1,10 @@
-"""A-S 承诺层：C_j = G·r_j + D·H₂(j‖RID‖y_j) + η_j，R_q=Z_q[x]/(x^256+1)，q=12289，k=m=4。
-三元随机带 r,η∈T^4；H₂=SHAKE256 确定性拒绝采样到 T^4。见证 = (2-bit 打包 r‖η, Merkle 路径)。
-D 可逆性：sample_pp_checked 真实检查并在失败时重采样（2B-2 任务一(1)）；
-随机 D 可逆概率 ≈97.94%（Step 1.7），Verify 本身不需求逆。"""
+"""A-S commitment layer: C_j = G·r_j + D·H₂(j‖RID‖y_j) + η_j over
+R_q = Z_q[x]/(x^256+1), q = 12289, k = m = 4.
+Ternary masking bands r, η ∈ T^4; H₂ = deterministic rejection sampling into
+T^4 via SHAKE256. Witness = (2-bit packed r‖η, Merkle path).
+D invertibility: sample_pp_checked really checks it and resamples on
+failure; a random D is invertible with probability ≈97.94%. Verify itself
+never needs the inverse."""
 import hashlib
 import itertools
 
@@ -15,7 +18,7 @@ KDIM = 4
 
 
 def polymul(a, b):
-    """负循环卷积 mod (x^256+1, q)。"""
+    """Negacyclic convolution mod (x^256+1, q)."""
     conv = np.convolve(a.astype(np.int64), b.astype(np.int64))
     r = conv[:DEG].copy()
     r[: len(conv) - DEG] -= conv[DEG:]
@@ -32,7 +35,8 @@ def _drbg(seed: bytes, n_bytes: int) -> bytes:
 
 
 def _ternary_from_stream(stream: bytes, count: int):
-    """2-bit/系数拒绝采样（拒绝 3）；返回 int8 数组 ∈{-1,0,1}。"""
+    """2-bit-per-coefficient rejection sampling (reject v == 3); returns an
+    int16 array in {-1, 0, 1}."""
     vals = []
     for b in stream:
         for nib in (b >> 4, b & 0xF):
@@ -45,11 +49,15 @@ def _ternary_from_stream(stream: bytes, count: int):
 
 
 def _uniform_q_stream(seed: bytes, count: int):
-    """无偏 [0,Q) 系数采样（2B-3 P0）：uint16 拒绝采样，v ≥ 5Q=61445 拒绝重抽。
-    旧实现 (hi<<8|lo)%Q：65536=5·12289+4091 ⇒ 4091 个余数 6 个原像、8198 个 5 个，
-    每系数 TVD = 4091·(6/65536−1/q)/2 + 8198·(1/q−5/65536)/2 = 4091/65536 ≈ 4.1643%。
-    拒绝后每余数恰 5 个原像 ⇒ 精确均匀；拒绝率 4091/65536 ≈ 6.2401%。
-    确定性：同 seed 同输出（扩展 ladder 固定）。"""
+    """Unbiased [0,Q) coefficient sampling: uint16 rejection, redraw when
+    v ≥ 5Q = 61445.
+
+    Why rejection: the naive (hi<<8|lo) % Q is biased — 65536 = 5·12289+4091,
+    so 4091 residues have 6 preimages and 8198 have 5, a per-coefficient TVD
+    of 4091·(6/65536−1/q)/2 + 8198·(1/q−5/65536)/2 = 4091/65536 ≈ 4.1643%.
+    After rejecting, every residue has exactly 5 preimages ⇒ exactly uniform;
+    rejection rate 4091/65536 ≈ 6.2401%. Deterministic: same seed, same
+    output (fixed extension ladder)."""
     LIMIT = 5 * Q                                            # 61445
     vals, pos, buf, ext = [], 0, _drbg(seed, count * 2 + 4096), 0
     while len(vals) < count:
@@ -65,23 +73,26 @@ def _uniform_q_stream(seed: bytes, count: int):
 
 
 def sample_pp(seed: bytes):
-    """G, D ∈ R_q^{4×4}（每系数精确均匀 mod q——2B-3 P0 拒绝采样；不检查 D 可逆性）。
-    注：P0 修复后同一 seed 的 (G,D) 字节与旧实现不同（旧实现有模偏差）；
-    尺寸/行为锚点不受影响（大小与系数值无关）。"""
+    """G, D ∈ R_q^{4×4} with every coefficient exactly uniform mod q
+    (rejection sampling above; D invertibility NOT checked here).
+    Note: the (G,D) bytes for a given seed differ from the very first
+    implementation, which had the modular bias — size anchors are unaffected
+    (sizes don't depend on coefficient values)."""
     coefs = _uniform_q_stream(b"QPRSS-pp|" + seed, 2 * KDIM * KDIM * DEG)
     mats = coefs.reshape(2, KDIM, KDIM, DEG)
     return mats[0], mats[1]
 
 
-# ---------- D 可逆性检查（2B-2 任务一(1)） ----------
+# ---------- D invertibility check ----------
 
 def _negacyclic_roots():
-    """x^256+1 在 F_q 的 256 个根。q−1=12288=2^12·3 ⇒ 512 | q−1，多项式完全分裂，
-    R_q ≅ F_q^256 积环（Step 1.7 结论）；根 = 512 阶本原单位根的奇次幂。"""
+    """The 256 roots of x^256+1 in F_q. q−1 = 12288 = 2^12·3, so 512 | q−1
+    and the polynomial splits completely: R_q ≅ F_q^256 as rings. The roots
+    are the odd powers of a primitive 512-th root of unity."""
     qm1 = Q - 1
     g = next(x for x in range(2, Q) if all(pow(x, qm1 // p, Q) != 1 for p in (2, 3)))
-    zeta = pow(g, qm1 // 512, Q)                     # 阶恰为 512
-    assert pow(zeta, 256, Q) == Q - 1                 # ζ^256 = −1 自检
+    zeta = pow(g, qm1 // 512, Q)                     # order exactly 512
+    assert pow(zeta, 256, Q) == Q - 1                 # sanity: ζ^256 = −1
     return [pow(zeta, 2 * k + 1, Q) for k in range(DEG)]
 
 
@@ -89,7 +100,7 @@ _ROOTS = None
 
 
 def _eval_poly(a, x: int) -> int:
-    """Horner 求值 mod q。"""
+    """Horner evaluation mod q."""
     acc = 0
     for c in a[::-1]:
         acc = (acc * x + int(c)) % Q
@@ -97,7 +108,7 @@ def _eval_poly(a, x: int) -> int:
 
 
 def is_unit_poly(a) -> bool:
-    """a ∈ R_q 是单位 ⇔ gcd(a, x^256+1)=1 ⇔ 在全部 256 个根处非零。"""
+    """a ∈ R_q is a unit ⟺ gcd(a, x^256+1) = 1 ⟺ nonzero at all 256 roots."""
     global _ROOTS
     if _ROOTS is None:
         _ROOTS = _negacyclic_roots()
@@ -120,7 +131,8 @@ def _sign4(p) -> int:
 
 
 def det4x4(M):
-    """4×4 矩阵在交换环 R_q 上的行列式（置换展开 24 项，每项 3 次多项式乘）。"""
+    """Determinant of a 4×4 matrix over the commutative ring R_q (24-term
+    permutation expansion, 3 polynomial multiplications per term)."""
     acc = np.zeros(DEG, dtype=np.int64)
     for p in itertools.permutations(range(4)):
         term = M[0][p[0]].astype(np.int64)
@@ -131,14 +143,17 @@ def det4x4(M):
 
 
 def is_invertible(D) -> bool:
-    """D ∈ R_q^{4×4} 可逆 ⇔ det(D) 是 R_q 单位（交换环上成立）。"""
+    """D ∈ R_q^{4×4} is invertible ⟺ det(D) is a unit of R_q (valid over a
+    commutative ring)."""
     return is_unit_poly(det4x4(D))
 
 
 def sample_pp_checked(seed: bytes):
-    """带 D 可逆性检查的参数采样：失败则 seed‖enc32(ctr) 重采样。
-    首轮即 sample_pp(seed)（结构锚点；2B-3 P0 后系数字节与旧实现不同——旧实现
-    模偏差 4.1643% TVD 已修复，见 _uniform_q_stream）。返回 (G, D, 重采样轮数 ctr)。"""
+    """Parameter sampling with the D invertibility check: on failure,
+    resample with seed‖enc32(ctr). Round 0 is exactly sample_pp(seed)
+    (structural anchor; the coefficient bytes differ from the very first
+    biased implementation — see _uniform_q_stream). Returns (G, D, number
+    of resampling rounds ctr)."""
     for ctr in range(1000):
         s = seed if ctr == 0 else seed + canon.enc32(ctr)
         G, D = sample_pp(s)
@@ -148,14 +163,16 @@ def sample_pp_checked(seed: bytes):
 
 
 def H2_poly(j: int, rid: bytes, y: bytes):
-    """确定性 H₂(j‖RID‖y) → T^4（4 条三元多项式，域分隔拒绝采样）。"""
+    """Deterministic H₂(j‖RID‖y) → T^4 (4 ternary polynomials, rejection
+    sampling with domain separation)."""
     stream = _drbg(b"QPRSS-H2|" + canon.enc32(j) + rid + y, 8192)
     t = _ternary_from_stream(stream, KDIM * DEG)
     return t.reshape(KDIM, DEG) % Q
 
 
 def ternary_rand(rng_seed: bytes):
-    """返回字面 {-1,0,1}（pack2 打包要求）；commit() 内部自行 mod q。"""
+    """Returns literal {-1,0,1} values (pack2 requires them); commit() does
+    its own mod q internally."""
     t = _ternary_from_stream(_drbg(b"QPRSS-rand|" + rng_seed, 8192), KDIM * DEG)
     return t.reshape(KDIM, DEG)
 
@@ -171,10 +188,10 @@ def commit(G, D, j: int, rid: bytes, y: bytes, r, eta):
     return C
 
 
-# ---------- 编码 ----------
+# ---------- encodings ----------
 
 def pack2(polys) -> bytes:
-    """三元 2-bit 打包（值+1∈{0,1,2}）。任意数组 4×256 → 256 B。"""
+    """Ternary 2-bit packing (value+1 ∈ {0,1,2}). Any 4×256 array → 256 B."""
     bits = []
     for row in polys:
         for c in row:
@@ -199,7 +216,7 @@ def unpack2(buf: bytes, rows: int):
 
 
 def pack14(C) -> bytes:
-    """C_j 全系数 14-bit 编码（4×256 → 1792 B）。"""
+    """All coefficients of C_j in 14-bit encoding (4×256 → 1792 B)."""
     flat = C.reshape(-1)
     assert all(0 <= int(v) < Q for v in flat)
     bits = []
@@ -225,7 +242,7 @@ def unpack14(buf: bytes):
 
 
 def pack_witness(r, eta) -> bytes:
-    """r‖η 共 8 条 → 512 B。"""
+    """r‖η, 8 polynomials total → 512 B."""
     return pack2(np.vstack([r, eta]))
 
 

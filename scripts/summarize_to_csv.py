@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
-"""由 results/raw 逐观测 CSV 生成 F1/F2/F3 单元统计 CSV（§九 6 CSV 族补齐）。
+"""Builds the F1/F2/F3 per-cell summary CSVs from the per-observation
+CSVs in results/raw (completes the six-CSV summary set).
 
-纯聚合（确定性）：F1=50 obs 中位+四分位（论文 [0274] 口径）；F2=3 种子×30
-均值；F3=5 种子均值。F4/F5 CSV 由各自实验器直写，F6 为 JSON 尺寸核对。
+Pure deterministic aggregation: F1 = median + quartiles over the 50 obs
+per cell; F2 = mean over 3 seeds x 30 reps; F3 = mean over 5 seeds.
+F4/F5 CSVs are written directly by their own experiment scripts; F6 is
+a JSON size check.
 """
 import csv
 import os
@@ -25,7 +28,7 @@ def q(xs, k):
     return xs[min(k, len(xs) - 1)]
 
 
-# F1: op,F,n_obs,median_ms,q1_ms,q3_ms  （KEYGEN 行 F=0）
+# F1: op,F,n_obs,median_ms,q1_ms,q3_ms  (KEYGEN rows have F=0)
 hdr, rs = rows("f1_fig2_qprss_raw.csv")
 cells = defaultdict(list)
 for r in rs:

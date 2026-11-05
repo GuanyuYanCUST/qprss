@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Stage-5 Phase-4 集成闸门冒烟（B1 主方案）。
+"""Integration smoke test (B1 primary scheme).
 
-1) n ∈ {16,64,102,256} 完整 Sign/Redact(t=5)/Verify；
-2) t ∈ {1,5,10,20,40} 合法长链 @n=102，d₀=40，每跳 1 删除，逐链 verify=PASS；
-3) n=102 固定最终 r=62：t=40（每轮 1）/t=8（每轮 5）/t=1（一次 40）→ 同一终态字段集；
-4) 真实逐操作计时 + 字节统计；
-5) 负测试抽查（篡改字段/非法三元/越权/重排）；
-6) 定位声明：冒烟≠论文性能统计样本（E1–E7 正式实验另跑，同硬件/同 reps/交错）。
+1) Full Sign/Redact(t=5)/Verify for n in {16,64,102,256};
+2) Legal long chains for t in {1,5,10,20,40} at n=102, d0=40, one deletion
+   per hop, per-chain verify=PASS;
+3) n=102 with fixed final r=62: t=40 (1 per round) / t=8 (5 per round) /
+   t=1 (40 at once) -> same final field set;
+4) Real per-operation timing + byte accounting;
+5) Negative-test spot checks (tampered field / non-ternary witness /
+   out-of-scope / log reorder);
+6) Scope note: smoke timing is a single wall-clock pass, NOT the paper's
+   performance statistics (formal experiments run separately: same hardware,
+   >=30 reps, interleaved, frozen code).
 
-Run: py -3.11 tests/test_s5_smoke.py
+Run: py -3.11 tests/test_s6_smoke.py
 """
 import hashlib
 import json
@@ -35,7 +40,7 @@ def record(name, ok, detail=""):
 
 
 def chain(n, t, per_hop, S0, pp, cr, sk_r, P0, dels):
-    """从 S0 跑 t 跳、每跳删 per_hop 个（dels 展开平铺）。返回 (S_t, 计时, 尺寸)。"""
+    """Run t hops from S0, deleting per_hop fields per hop (dels flattened). Returns (S_t, timings, sizes)."""
     S = S0
     hop_ms, sizes = [], [len(S.serialize())]
     it = iter(dels)
@@ -55,7 +60,8 @@ def main():
     ra = Q.RA("B1")
     pp = Q.setup("B1", seed=b"s5-smoke")
     sk_s, pk_s = core("B1").keygen()
-    # SF-A1 适配：signer 证书 scope 显式枚举全部测试 RID（本测试按 n 派生 rid）
+    # Issuance-side scope rule: the signer certificate scope must explicitly
+    # enumerate all RIDs used here (this test derives one rid per n).
     _rids = tuple(bytes([n & 0xFF] * 16) for n in (16, 64, 102, 256))
     cert_s = ra.issue(bytes(16), pk_s, b"signer", (_rids, b"*"), 0, 2**40)
     sk_r, pk_r = core("B1").keygen()
@@ -70,7 +76,7 @@ def main():
         ms = round((time.perf_counter() - t1) * 1000, 1)
         return S0, P0, ms
 
-    # ---- 1) 规模扫描 n×t=5 ----
+    # ---- 1) Scale sweep n x t=5 ----
     for n in (16, 64, 102, 256):
         S0, P0, ms_sign = make_S0(n)
         S, hop_ms, sizes = chain(n, 5, 1, S0, pp, cr, sk_r, P0, list(range(2, 7)))
@@ -81,11 +87,11 @@ def main():
         assert len(S.It) == n - 5
         R["grid"][n] = dict(sign_ms=ms_sign, redact_hop_ms=hop_ms, verify_ms=ms_ver,
                             sigma_bytes=sizes[-1], sigma0_bytes=sizes[0], r=n - 5)
-        record(f"S-n{n} Sign/Redact×5/Verify 全过",
-               True, f"sign {ms_sign}ms, hop {min(hop_ms):.0f}–{max(hop_ms):.0f}ms, "
-                     f"verify {ms_ver}ms, |Σ₅| {sizes[-1]} B (r={n-5})")
+        record(f"S-n{n} Sign/Redact x5/Verify all pass",
+               True, f"sign {ms_sign}ms, hop {min(hop_ms):.0f}-{max(hop_ms):.0f}ms, "
+                     f"verify {ms_ver}ms, |sigma_5| {sizes[-1]} B (r={n-5})")
 
-    # ---- 2) 深度扫描 t∈{1,5,10,20,40} @n=102（每跳 1 删）----
+    # ---- 2) Depth sweep t in {1,5,10,20,40} @n=102 (1 deletion per hop) ----
     S0_102, P0_102, _ = make_S0(102)
     for t in (1, 5, 10, 20, 40):
         S, hop_ms, sizes = chain(102, t, 1, S0_102, pp, cr, sk_r, P0_102,
@@ -98,11 +104,11 @@ def main():
                                 redact_hop_ms=hop_ms, verify_ms=ms_ver,
                                 sigma_bytes=sizes[-1], growth_per_hop=round(
                                     (sizes[-1] - sizes[0]) / t, 1)))
-        record(f"D-t{t} 合法长链 verify=PASS（d₀=40，r={102-t}）", True,
-               f"hop均值 {sum(hop_ms)/t:.0f}ms, verify {ms_ver}ms, "
-               f"|Σ| {sizes[-1]} B, 每跳增量 {R['chains'][-1]['growth_per_hop']} B")
+        record(f"D-t{t} legal long chain verify=PASS (d0=40, r={102-t})", True,
+               f"hop mean {sum(hop_ms)/t:.0f}ms, verify {ms_ver}ms, "
+               f"|sigma| {sizes[-1]} B, growth/hop {R['chains'][-1]['growth_per_hop']} B")
 
-    # ---- 3) r=62 轮次-深度解耦（同一终态字段集 {1,42..102}）----
+    # ---- 3) r=62 rounds-vs-depth decoupling (same final field set {1,42..102}) ----
     D40 = list(range(2, 42))
     fin = frozenset({1} | set(range(42, 103)))
     for t, per in ((40, 1), (8, 5), (1, 40)):
@@ -115,10 +121,10 @@ def main():
         R["chains"].append(dict(n=102, t=t, per_hop=per, r=62, verify="PASS",
                                 same_final_set=True, redact_hop_ms=hop_ms,
                                 verify_ms=ms_ver, sigma_bytes=sizes[-1]))
-        record(f"X-t{t}x{per} r=62 同一终态字段集 verify=PASS", True,
-               f"终态一致={same}, |Σ| {sizes[-1]} B, verify {ms_ver}ms")
+        record(f"X-t{t}x{per} r=62 same final field set verify=PASS", True,
+               f"final_set_match={same}, |sigma| {sizes[-1]} B, verify {ms_ver}ms")
 
-    # ---- 4) 负测试抽查（n=16 链上）----
+    # ---- 4) Negative-test spot checks (on the n=16 chain) ----
     S0_16, P0_16, _ = make_S0(16)
     S16, _, _ = chain(16, 2, 1, S0_16, pp, cr, sk_r, P0_16, [2, 3])
 
@@ -150,7 +156,7 @@ def main():
                                                 frozenset(range(2, 17)), 37, 16), cx, sk_x, 999)
     neg("out-of-scope", lambda: Q.verify({"pk_ra": ra.pk}, fn, "hist"), "V7.7")
 
-    # ---- 环境/摘要 ----
+    # ---- Environment / digests ----
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     srcs = {}
     for f in os.listdir(os.path.join(base, "s6t64")):
@@ -159,10 +165,10 @@ def main():
             srcs[f] = hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
     R["env"] = dict(python=sys.version.split()[0], machine=platform.machine(),
                     system=platform.system(), numpy=__import__("numpy").__version__,
-                    note="冒烟计时=单次墙钟，非 E1–E7 正式统计（正式实验需 ≥30 reps 交错+冻结）")
+                    note="smoke timing = single wall-clock pass, not formal statistics (formal runs: >=30 interleaved reps on frozen code)")
     R["source_sha256_16"] = srcs
-    record("ENV 登记完成", True, f"{R['env']['python']} / numpy {R['env']['numpy']} / "
-                                f"{len(srcs)} 源文件摘要")
+    record("ENV registered", True, f"{R['env']['python']} / numpy {R['env']['numpy']} / "
+                                   f"{len(srcs)} source-file digests")
 
     R["wall_s"] = round(time.time() - t0, 1)
     R["verdict"] = "ALL_S5_SMOKE_PASS" if all(v["pass"] for v in R["tests"].values()) else "S5_SMOKE_FAIL"

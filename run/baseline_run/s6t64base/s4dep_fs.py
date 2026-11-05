@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
-"""RouteB Stage-4 E0: custom Fiat-Shamir signature, B1-65 parameters.
+"""Custom Fiat-Shamir signature, B1-65 parameters.
 
-Construction (Stage-3 01号 corrected spec, full-box masking):
+Construction (full-box masking):
   KeyGen: seed -> A in R^k x m; s,e ternary eta=1; t = A s + e
   Sign:   y1,y2 <- [-g1, g1] full box; w = A y1 + y2; c = H1(dom|w|M_*);
           z = y + (s,e)c; accept iff |z|_inf <= g1 - beta; output (z1, z2, c)
   Verify: |z|_inf <= g1 - beta; w' = A z1 + z2 - t c; accept iff c == H1(...)
-Signature = (z1, z2, c): w is never transmitted (R1-C4).
+Signature = (z1, z2, c): w is never transmitted.
 
-E9-3 discipline: `verify` takes an optional h1_override table for the
+Discipline: `verify` takes an optional h1_override table for the
 FS signing-oracle simulation test; independent (z, c) without programming
-must fail (tested in T4/T5).
+must fail (covered in the theorem test suite).
 """
 
-# [Stage-5.10.3 τ=64 候选] 本文件 = 冻结 s4_fs.py（sha256 0c80e1c5…）的副本，
-# 唯一改动 = 导入行改相对导入 .s4dep_core（携带 τ=64 FS dict）；全部函数体
-# 逐字不变——FS 以 call-time 查找消费，τ/β/γ₁/cbytes 全部经参数 dict 流动。
+# The B1-65 parameter dict (τ=64) lives in .s4dep_core and is consumed
+# call-time through FS[...], so τ/β/γ₁/cbytes all flow from that one table.
 from .s4dep_core import (FS, ShakeRng, SysRng, polymul, vadd, vsub, mat_vec,
                         vec_scal, vec_add, vec_sub, center, pack_bits, unpack_bits,
                         pack_signed, unpack_signed, sample_in_ball, c_encode,
@@ -146,7 +145,7 @@ def sig_from_bytes(buf):
     polys = [zflat[i * d:(i + 1) * d] for i in range(FS["k"] + FS["m"])]
     return polys[:FS["m"]], polys[FS["m"]:], c   # z1 (m), z2 (k)
 
-# ---------------- FS signing-oracle simulator (E9-3) ---------------------------
+# ---------------- FS signing-oracle simulator ----------------------------------
 def sim_sign(pk, msg, rng=None):
     """BBD'23 Thm 3 Sign->Prog step: sample (z,c) independently, PROGRAM H1.
 

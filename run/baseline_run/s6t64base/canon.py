@@ -1,14 +1,16 @@
-"""规范转录编码（单一来源）。15 号补丁后版本：λ_H 默认 48 B（32 为对照）。
-所有 Sign/Verify 一律调用本模块；任何算法不得内联拼接。"""
+"""Canonical transcription encodings (single source). λ_H defaults to 48 B
+(32 B is the comparison setting). All Sign/Verify paths go through this
+module; no algorithm is allowed to inline its own concatenations."""
 import hashlib
 import struct
 
-LAMBDA_H = 48  # 优先候选（15号 §5.2）；G6 对照时改为 32
-Y_LEN = 32     # 合成测试默认字段值长度（v3 起序列化用长度前缀，不再要求定长）
+LAMBDA_H = 48  # default; switch to 32 for the ablation comparison
+Y_LEN = 32     # default synthetic field-value length (v3 serialization uses
+               # length prefixes, so fixed length is no longer required)
 
 ROLES = {b"signer": 0, b"physician": 1, b"nurse": 2, b"admin": 3, b"auditor": 4}
 ROLE_BY_CODE = {v: k for k, v in ROLES.items()}
-WILD = b"*"          # 通配符：只能是整体全集值（15号 §二）
+WILD = b"*"          # wildcard: whole-universe value only, never a pattern
 CTX_CERT = b"qprss-cert"
 CTX_ORIG = b"qprss-orig"
 CTX_RED = b"qprss-red"
@@ -33,13 +35,15 @@ def enc64(v: int) -> bytes:
 
 
 def enc_field(j: int, y: bytes) -> bytes:
-    """v3 可变长字段编码：enc32(j)‖enc32(len(y))‖y（2B-2 任务四(2)）。
-    签名与验证使用完全相同的字节表示——y 由调用方规范化产生（如 FHIR canonical_json）。"""
+    """v3 variable-length field encoding: enc32(j)‖enc32(len(y))‖y.
+    Signing and verification use exactly these bytes — y is produced by the
+    caller's canonicalization (e.g. FHIR canonical_json)."""
     return enc32(j) + enc32(len(y)) + y
 
 
 def dec_field(buf, off: int):
-    """返回 (j, y, 结束偏移)；越界即拒（自定界流的截断守卫）。"""
+    """Returns (j, y, end offset); out-of-bounds raises (truncation guard
+    for the self-delimiting stream)."""
     if off + 8 > len(buf):
         raise ValueError("field header truncated")
     j = struct.unpack(">I", buf[off:off + 4])[0]
@@ -55,7 +59,7 @@ def enc256(v: bytes) -> bytes:
 
 
 def bmp(I, n: int) -> bytes:
-    """位图：索引 j（1..n）→ 第 j-1 位。长度恰 ⌈n/8⌉。"""
+    """Bitmap: index j (1..n) → bit j−1. Length exactly ⌈n/8⌉."""
     out = bytearray((n + 7) // 8)
     for j in I:
         assert 1 <= j <= n, f"index {j} out of range"
@@ -68,8 +72,8 @@ def bmp_decode(b: bytes, n: int):
     return {j for j in range(1, n + 1) if b[(j - 1) // 8] >> ((j - 1) % 8) & 1}
 
 
-# ---------- 策略编码 ----------
-# encP = admLen(1) | 每项 role(1)+tag(1)+[n(1)+ids*16] | bmp(W) | d(4)
+# ---------- policy encodings ----------
+# encP = admLen(1) | per-entry role(1)+tag(1)+[n(1)+ids*16] | bmp(W) | d(4)
 
 def enc_adm_entry(role: bytes, idpat) -> bytes:
     code = ROLES[role]
@@ -85,7 +89,7 @@ def encP(P) -> bytes:
     return bytes([len(P.adm)]) + adm + bmp(P.w, P.n) + enc32(P.d)
 
 
-# ---------- 证书消息 ----------
+# ---------- certificate messages ----------
 # scope = ridTag(1)+[n(1)+rids*16] + jTag(1)+[n(1)+j*2]
 
 def enc_scope(scope) -> bytes:
@@ -112,17 +116,19 @@ def M_certR(rid_id: bytes, pk: bytes, role: bytes, scope, nb: int, na: int) -> b
 
 
 def M_orig(rid: bytes, n: int, acc0: bytes, P0, I0, sd: bytes = None) -> bytes:
-    """sd（schema_digest，17号）：提供时绑定字段语义映射（j→path/type 表的摘要）。
-    不提供时字节与 2B-2 完全一致（合成层锚点不变）。"""
+    """sd (schema digest), when provided, binds the field semantic map (the
+    digest of the j→path/type table). Without it the bytes match the older
+    synthetic-layer artifacts exactly (that anchor stays unchanged)."""
     out = b"QPRSS-v2|orig" + rid + enc32(n) + acc0 + encP(P0) + bmp(I0, n)
     return out if sd is None else out + b"|sd|" + sd
 
 
 def M_init(rid: bytes, n: int, acc0: bytes, P0, I0, sd: bytes = None) -> bytes:
-    """审计链锚（h₀ = H_L(M_init)）。2B-3 P2：提供时追加 schema_digest——
-    否则同 acc0/P0 不同 sd 的两条记录 h₀ 相同，删改者审计签名（M_red 经 h_prev）
-    可跨 schema 上下文移植（attack_prefix_2b3.py [P2] 实证）。不提供时字节与
-    2B-2 一致（无 sd 流锚点不变）。"""
+    """Audit-chain anchor (h₀ = H_L(M_init)). The sd append exists because
+    without it two records with the same acc0/P0 but different schemas share
+    h₀ — an editor's audit signature (M_red chains through h_prev) could
+    then be transplanted across schema contexts. Without sd the bytes match
+    the older anchor exactly."""
     out = b"QPRSS-v2|init" + rid + enc32(n) + acc0 + encP(P0) + bmp(I0, n)
     return out if sd is None else out + b"|sd|" + sd
 
@@ -139,9 +145,11 @@ def M_gaz(period: int, rid: bytes, h_star: bytes, t_star: int, ts: int) -> bytes
     return b"QPRSS-v2|gaz" + enc32(period) + rid + h_star + enc32(t_star) + enc64(ts)
 
 
-# Stage-5.9 P0.2-r2（SECREV1-F3/AUD-04）：锚定域绑定撤销 epoch——新鲜/公报
-# 响应携带 RA.epoch，验证器据以拒绝过期 revsnap（rv_epoch < anchor_epoch）。
-# v3 前缀与 v2 域零交集（旧签名锚仍按 v2 解析=legacy，无 epoch 可比对）。
+# v3 anchors the revocation epoch into the response domain: fresh/gazette
+# responses carry RA.epoch, and verifiers use it to reject stale revsnaps
+# (rv_epoch < anchor_epoch). The v3 prefix is disjoint from the v2 domains
+# (old signature anchors still parse as v2 = legacy, with no epoch to
+# compare against).
 
 def M_resp3(nonce: bytes, rid: bytes, h_star: bytes, t_star: int, ts: int,
             epoch: int) -> bytes:
@@ -156,7 +164,8 @@ def M_gaz3(period: int, rid: bytes, h_star: bytes, t_star: int, ts: int,
 
 
 def parse_resp3(msg: bytes):
-    """M_resp3 对偶解析；结构不符 ValueError（不可信输入，拒绝）。"""
+    """Dual parse of M_resp3; structural mismatch raises ValueError
+    (untrusted input → reject)."""
     if msg[:13] != b"QPRSS-v3|resp" or len(msg) != 13 + 32 + 16 + 32 + 4 + 8 + 8:
         raise ValueError("bad resp3")
     p = 13
@@ -169,7 +178,7 @@ def parse_resp3(msg: bytes):
 
 
 def parse_gaz3(msg: bytes):
-    """M_gaz3 对偶解析；结构不符 ValueError。"""
+    """Dual parse of M_gaz3; structural mismatch raises ValueError."""
     if msg[:12] != b"QPRSS-v3|gaz" or len(msg) != 12 + 4 + 16 + 32 + 4 + 8 + 8:
         raise ValueError("bad gaz3")
     p = 12
@@ -183,15 +192,17 @@ def parse_gaz3(msg: bytes):
 
 
 def M_reginit(rid: bytes, n: int, acc0: bytes, P0, cid: bytes, sd: bytes = None) -> bytes:
-    """16号 §二：初始登记转录（绑定 Cert_S）；17号：提供时追加 schema_digest
-    （RA 初登锚定字段语义映射）。不提供时字节与 16号 一致。"""
+    """Initial registration transcript (binds Cert_S); the optional sd
+    anchors the field semantic map at first registration. Without sd the
+    bytes match the earlier form."""
     out = b"QPRSS-v2|reginit" + rid + enc32(n) + acc0 + encP(P0) + cid
     return out if sd is None else out + b"|sd|" + sd
 
 
-# ---------- schema 编码与摘要（17号：字段语义映射的认证） ----------
-# entries = [(j, path, ftype), ...]，path 元素为 str（dict 键）或 int（list 下标），
-# ftype ∈ {"str","int","bool","list","dict"}（白名单，17号 §3：JCS 安全子集）。
+# ---------- schema encoding and digest (authenticating the semantic map) ----------
+# entries = [(j, path, ftype), ...], path elements are str (dict keys) or
+# int (list indices), ftype ∈ {"str","int","bool","list","dict"} (the
+# JCS-safe whitelist).
 
 def enc_schema(entries) -> bytes:
     out = b""
@@ -209,7 +220,7 @@ def enc_schema(entries) -> bytes:
 
 
 def schema_digest(entries) -> bytes:
-    """sd = H("QPRSS-v3|schema" ‖ count ‖ enc_schema)。长度 = λ_H。"""
+    """sd = H("QPRSS-v3|schema" ‖ count ‖ enc_schema). Length = λ_H."""
     ent = list(entries)
     assert len({e[0] for e in ent}) == len(ent), "schema j 重复"
     return H(b"QPRSS-v3|schema" + enc32(len(ent)) + enc_schema(ent))
@@ -217,7 +228,8 @@ def schema_digest(entries) -> bytes:
 
 def M_reg(rid: bytes, ver_old: int, h_old: bytes, ver_new: int, h_new: bytes,
           t_new: int, cid: bytes, id16: bytes, role: bytes) -> bytes:
-    """16号 §三：扩展登记转录（旧/新链头+版本+请求者认证信息）。"""
+    """Extended registration transcript (old/new chain heads + version +
+    requester authentication)."""
     return (b"QPRSS-v2|reg" + rid + enc32(ver_old) + h_old
             + enc32(ver_new) + h_new + enc32(t_new) + cid + id16 + bytes([ROLES[role]]))
 
@@ -234,22 +246,25 @@ def hi_of(e_bytes: bytes, h_prev: bytes) -> bytes:
     return H_L(e_bytes + h_prev)
 
 
-# ---------- 审计条目编码 ----------
+# ---------- audit-entry encoding ----------
 # e = seq(4) ID(16) role(1) H(Cert)(λ) op(1) bmp(I_{i-1}) bmp(I_i) encP(P_{i-1}) encP(P_i) ts(8)
-# 15号 P1：ts 为声明性元数据，不参与判定；t_rev^seen 已删除。
+# ts is declared metadata and takes no part in any decision.
 
 def enc_e(seq, rid_id: bytes, role: bytes, cert_h: bytes, I_prev, I_new, P_prev, P_new, ts, n):
     return (enc32(seq) + rid_id + bytes([ROLES[role]]) + cert_h + b"R"
             + bmp(I_prev, n) + bmp(I_new, n) + encP(P_prev) + encP(P_new) + enc64(ts))
 
 
-# ---------- Stage-5.9 撤销快照（s59 新增；与既有签名域零交集） ----------
+# ---------- revocation snapshots (disjoint from all signed domains) ----------
 
 def M_revsnap(epoch: int, entries) -> bytes:
-    """RA 撤销快照：b"QPRSS-v3|revsnap"|epoch|count|每项 id16(16B)|enc64(eff_ts)。
-    entries = [(id16, eff_ts), ...]；eff_ts 与 e.ts 同一声明性墙钟域
-    （hop 声称时间 ≥ eff_ts ⟹ 该 hop 属撤销后授权，验证拒绝；之前的合法
-    hop 不受其后撤销牵连）。RA 签名（CTX_ANC）后才是可信撤销状态。"""
+    """RA revocation snapshot:
+    b"QPRSS-v3|revsnap"|epoch|count|per-entry id16(16 B)|enc64(eff_ts).
+    entries = [(id16, eff_ts), ...]; eff_ts lives in the same declared
+    wall-clock domain as e.ts (a hop claiming a time ≥ eff_ts belongs to
+    post-revocation authorization → verification rejects it; legal hops
+    from before are unaffected by a later revocation). Trusted revocation
+    state only after the RA signature (CTX_ANC)."""
     ent = sorted(entries)
     out = b"QPRSS-v3|revsnap" + enc64(epoch) + enc32(len(ent))
     for (id16, eff_ts) in ent:
@@ -259,9 +274,10 @@ def M_revsnap(epoch: int, entries) -> bytes:
 
 
 def parse_revsnap(msg: bytes):
-    """M_revsnap 的对偶解析；结构不符即 ValueError（= 不可信输入，拒绝）。
-    P0.2-r2（AUD-03）：截断体在此抛 ValueError 而非 struct.error——verify 的
-    except 子句才接得住。"""
+    """Dual parse of M_revsnap; structural mismatch raises ValueError (=
+    untrusted input → reject). A truncated body must raise ValueError here
+    rather than struct.error — that is what verify's except clause can
+    actually catch."""
     if msg[:16] != b"QPRSS-v3|revsnap":
         raise ValueError("bad revsnap prefix")
     if len(msg) < 28:

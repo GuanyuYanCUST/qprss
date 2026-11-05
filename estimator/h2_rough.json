@@ -3,7 +3,7 @@
   "stage": "rough",
   "timestamp": "2026-10-19T17:00:32.070999",
   "estimator_commit": "53da5982597709ba0fdf94ea37a84d822310fd84",
-  "estimator_path": "/mnt/d/year/2024/成果/后量子基于策略的可编辑签名/大修/Step1.6_安全可行性闸门/tests/lattice-estimator",
+  "estimator_path": "external checkout of the lattice-estimator repository, pinned by estimator_commit",
   "crlf_strip_blob_equal": "0/17 (0 => all equal)",
   "sage_version": "passagemath version 10.6.48, Release Date: 2026-02-01",
   "python": "3.10.12",

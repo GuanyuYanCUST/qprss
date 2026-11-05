@@ -1,5 +1,6 @@
-"""基线 C 承诺层：独立随机盐（32 B，与 λ_H 解耦，15号 §5.2）+ 固定 Merkle。
-ℓ_j = H("leaf"‖enc32(j)‖salt_j‖y_j)；见证 = (salt_j, 路径)。与 A-S 共用策略/审计/编码。"""
+"""Baseline C commitment layer: independent random salt (32 B, decoupled from
+λ_H) + fixed Merkle. ℓ_j = H("leaf"‖enc32(j)‖salt_j‖y_j); witness =
+(salt_j, path). Shares policy/audit/encoding with the A-S layer."""
 from . import canon
 
 SALT_LEN = 32

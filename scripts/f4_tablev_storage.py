@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-"""F4 = 表 V + 图 3(d) 存储拆分：(n,t) ∈ {64,102}×{0..40}，行级核对
-完整工件大小 = 各序列化组成部分之和（任务书 F4）。
+"""F4 = Table V + Fig. 3(d) storage breakdown: (n,t) in {64,102}x{0..40},
+row-level check that the full artifact size equals the sum of its
+serialized parts.
 
-拆分（Sigma.serialize 结构）：
-  σ_base = head + σ0 + Cert_S + Σ 保留字段 (y+witness+path)   （不含审计日志）
-  Log_t  = Σ e_i + Σ τ_i + Σ 删改者证书 bytes                   （审计日志段）
-  σ_S    = len(Sigma.serialize()) —— 逐行断言 σ_base + Log_t == σ_S
-t=0/20/40 为表 V 六行；全 t 序列供图 3(d)。旧值（104,433/316,693/…）
-仅为基线参照，非目标（任务书明示）。
+Breakdown (mirrors the Sigma.serialize layout):
+  sigma_base = head + sigma0 + Cert_S + sum of kept fields
+               (y+witness+path) - everything but the audit log
+  Log_t      = sum e_i + sum tau_i + sum redactor certificate bytes
+               (the audit-log segment)
+  sigma_S    = len(Sigma.serialize()) - each row asserts
+               sigma_base + Log_t == sigma_S
+t=0/20/40 give the six Table V rows; the full t series feeds Fig. 3(d).
+The old numbers (104,433/316,693/...) are baseline reference only, not
+targets.
 """
 import csv
 import hashlib
@@ -42,11 +47,12 @@ def fields_for(n):
 
 
 def decompose(S):
-    """独立重算各段字节数（与 serialize 平行实现，行级核对用）。"""
+    """Recompute each segment's byte count independently (a parallel
+    implementation of serialize, for the row-level check)."""
     js = sorted(S.It)
     head = (S.rid + canon.enc32(S.n)
             + Q.SCHEME_CHAR[S.scheme]
-            + bytes([0x7]) + canon.enc32(len(js))       # cert_s|sd|include 标志
+            + bytes([0x7]) + canon.enc32(len(js))       # cert_s|sd|include flags
             + canon.enc32(len(S.log)) + canon.enc32(len(S.certs))
             + (S.sd or b"") + S.acc0 + canon.enc_pol(S.P0)
             + canon.bmp(set(range(1, S.n + 1)), S.n)
@@ -109,7 +115,8 @@ def main():
         b0 = [r for r in rows if r[0] == n and r[1] == 0][0]
         b40 = [r for r in rows if r[0] == n and r[1] == 40][0]
         d1 = [r for r in rows if r[0] == n and r[1] == 1][0][4] - b0[4]
-        print(f"n={n}: σ_S {b0[4]:,} → {b40[4]:,} B (40 跳); 首跳 Δ={d1:,} B")
+        print(f"n={n}: sigma_S {b0[4]:,} -> {b40[4]:,} B (40 hops); "
+              f"first-hop delta={d1:,} B")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["n", "t", "sigma_base_B", "log_t_B", "sigma_S_B"])
@@ -123,9 +130,12 @@ def main():
     summary = dict(environment=dict(python=platform.python_version(),
                                     ts=time.strftime("%Y-%m-%dT%H:%M:%S")),
                    tableV_rows=tv, all_row_sum_checks_pass=True,
-                   notes=["ver=2 一般编码：σ_base/Log 与旧受限编码值有可预期偏移",
-                          "每行断言 sigma_base+log_t == len(serialize())（全部通过）",
-                          "旧表 V 数值为历史基线（非目标）"])
+                   notes=["ver=2 general encoding: sigma_base/Log shift "
+                          "predictably vs the old restricted encoding",
+                          "each row asserts sigma_base+log_t == "
+                          "len(serialize()) (all pass)",
+                          "old Table V numbers are a historical baseline, "
+                          "not targets"])
     with open(js_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=1)
     print(f"\nF4_DONE csv={csv_path}\n       json={js_path}")

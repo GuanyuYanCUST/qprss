@@ -1,5 +1,6 @@
-"""策略层：P=(Adm,W,d)，K=[n]\W，P(I)=1 ⟺ K⊆I。15号 §二精确通配符语义。
-idpat ∈ {b"*"} ∪ (16B ID 的元组)：通配=整体全集值，无前缀/模式匹配。"""
+"""Policy layer: P = (Adm, W, d), K = [n]\W, P(I) = 1 ⟺ K ⊆ I.
+idpat ∈ {b"*"} ∪ (tuple of 16 B IDs): the wildcard is the whole-universe
+value — no prefix or pattern matching."""
 
 
 class Policy:
@@ -7,7 +8,7 @@ class Policy:
 
     def __init__(self, adm, w, d, n):
         self.adm = tuple(adm)          # ((role_bytes, idpat), ...)
-        self.w = frozenset(w)          # 可删索引集 ⊆ [n]
+        self.w = frozenset(w)          # deletable index set ⊆ [n]
         self.d = int(d)
         self.n = n
 
@@ -31,7 +32,7 @@ class Policy:
 def _pat_match(pat, rid_id: bytes) -> bool:
     if pat == b"*":
         return True
-    return rid_id in pat  # 枚举元组
+    return rid_id in pat  # enumerated tuple
 
 
 def IDMatch(a, rid_id: bytes) -> bool:
@@ -43,7 +44,8 @@ def AuthMember(role: bytes, rid_id: bytes, Adm) -> bool:
 
 
 def _entry_covered(x, x0) -> bool:
-    """收紧方向单项覆盖：x 的每个 ID 被 x0 的模式覆盖；x 为通配须 x0 也通配。"""
+    """Per-entry coverage in the tightening direction: every ID of x is
+    covered by x0's pattern; a wildcard x requires x0 to be a wildcard too."""
     if x == b"*":
         return x0 == b"*"
     return all(_pat_match(x0, i) for i in x)
@@ -65,7 +67,7 @@ def ScopeMatchJ(scope, J) -> bool:
 
 
 def tighten_ok(P_new, P_old) -> bool:
-    """P_new ⊑ P_old：AdmLeq ∧ W 收紧 ∧ d 每轮至少减 1。"""
+    """P_new ⊑ P_old: AdmLeq ∧ W tightened ∧ d decreases by at least 1 per hop."""
     return (AdmLeq(P_new.adm, P_old.adm)
             and P_new.w <= P_old.w
             and P_old.d - P_new.d - 1 >= 0
@@ -73,5 +75,5 @@ def tighten_ok(P_new, P_old) -> bool:
 
 
 def inv_w(I, P) -> bool:
-    """Inv-W 不变式：[n]\\I ⊆ W（已删索引永久驻留 W，11/15 号方案 A）。"""
+    """Inv-W invariant: [n]\\I ⊆ W (deleted indices stay in W permanently)."""
     return frozenset(range(1, P.n + 1)) - frozenset(I) <= P.w

@@ -1,15 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Gaps-fix（末两缺口修复）：任务 1 续签稳定身份摘要 bid / 任务 2 旧状态恢复 fail-closed。
+"""Two closing fixes: (1) a renewal-stable identity digest bid; (2) fail-closed
+restoration of old RA snapshots.
 
-任务 1（G1）：bid_S = BindId(RID, ID_S, PK)（canon.H_B 域，384-bit，不含有效期/
-  序列号/签发版本/签名随机性）；fresh 应答 M_resp5（= 论文 EncResp_5）携带 bid；
-  V9 比对应答 bid 与工件 BindId(RID, ID_S, PK)。
-  验收：同 RID 同 (ID_S,PK) 合法续签（新有效期/新正文/新管理员签名）后，
-  续签工件 hist+fresh 双 accept、原证工件 fresh 仍 accept；换 ID 或 PK 时
-  签发拒绝且换证工件 fresh 拒；应答 bid/RID/nonce/链头/纪元篡改全拒。
-任务 2（G2）：restore 入口对版本/signers/cid/bid/回滚/冲突 fail-closed；
-  缺证据旧快照不得恢复出可绕过唯一绑定的状态；RA.issue 不完整状态拒签发；
-  多线程同 RID 签发唯一性。
+Task 1 (G1): bid_S = BindId(RID, ID_S, PK) (canon.H_B domain, 384-bit; covers
+  neither validity window, nor sequence number, nor issuance version, nor
+  signature randomness); the fresh response M_resp5 (= the paper's EncResp_5)
+  carries bid; V9 compares the response bid against the artifact's
+  BindId(RID, ID_S, PK).
+  Acceptance: after a legitimate renewal for the same RID and (ID_S,PK) (new
+  validity window, new body, new administrator signature), the renewed
+  artifact accepts hist and fresh, and the original artifact still accepts
+  fresh; issuing under a different ID or PK is refused and the
+  swapped-certificate artifact fails fresh; tampering with the response's
+  bid/RID/nonce/chain head/epoch is always rejected.
+Task 2 (G2): restore is fail-closed on version/signers/cid/bid/rollback/
+  conflict; an old snapshot with missing evidence must not restore to a state
+  that bypasses the unique binding; RA.issue refuses to sign on incomplete
+  state; concurrent issuance for the same RID keeps a unique binding.
 """
 import copy
 import json
@@ -32,7 +39,7 @@ def record(name, ok, note=""):
 
 
 def vr(name, fn, step="V9", exc=Q.VerifyReject):
-    """断言 fn 被 exc 拒绝；step=None 表示任意落点皆可。"""
+    """Assert that fn is rejected by exc; step=None means any rejection point."""
     try:
         fn()
         record(name, False, "accepted(!)")
@@ -67,7 +74,7 @@ n32 = b"sf-gaps-n1".ljust(32, b"|")
 
 
 def clone_with_signer(S, skX, certX):
-    """同 Θ0 换证书副本（σ0 在 certX.pk 下重签；Θ0/h0/域值不变；t=0 工件）。"""
+    """Same Theta0 with a swapped certificate (sigma0 re-signed under certX.pk; Theta0/h0/field values unchanged; t=0 artifact)."""
     S2 = Q.Sigma(S.scheme, S.rid, S.n)
     S2.sd, S2.acc0, S2.P0, S2.It = S.sd, S.acc0, S.P0, set(S.It)
     S2.fields = dict(S.fields)
@@ -87,17 +94,17 @@ def fresh(S, nonce=None, ra=None, snap=None):
     return Q.verify({"pk_ra": (ra or RA).pk}, S, "fresh", **kw)
 
 
-# ================= 任务 1：G1 续签稳定身份摘要 =================
-# ---- G1-1 首次登记：cid/bid 双记录，hist+fresh 双 accept ----
-vr("G1-1a 未登记 RID 先 fresh 拒（no registration）",
+# ================= Task 1: G1 renewal-stable identity digest =================
+# ---- G1-1 initial registration: cid/bid both recorded, hist+fresh both accept ----
+vr("G1-1a fresh on an unregistered RID rejected first (no registration)",
    lambda: fresh(S1, snap=RA.revocation_snapshot()), step=None, exc=Q.RedactRefused)
 RA.register_initial(S1, certA, sig_init)
 snap0 = RA.revocation_snapshot()
-record("G1-1b 首登记录 cid=CertId(M_certS) 与 bid=BindId(RID,ID,PK)",
+record("G1-1b initial registration records cid=CertId(M_certS) and bid=BindId(RID,ID,PK)",
        RA.reg[RID]["cid"] == canon.CertId(certA.msg)
        and RA.reg[RID]["bid"] == canon.BindId(RID, certA.id, certA.pk)
        and len(RA.reg[RID]["bid"]) == 48)
-record("G1-1c cid ≠ bid（不同域标签/输入，三种摘要不混淆）",
+record("G1-1c cid != bid (different domain tags/inputs; the three digests never conflate)",
        RA.reg[RID]["cid"] != RA.reg[RID]["bid"]
        and canon.CertId(certA.msg) == canon.H(certA.msg)
        and canon.BindId(RID, certA.id, certA.pk)
@@ -109,62 +116,64 @@ for bad in ((RID[:15], certA.id, certA.pk), (RID, certA.id[:15], certA.pk)):
         len_ok = False
     except ValueError:
         pass
-record("G1-1d BindId 域分离（H_B≠H≠H_L）与 16B 输入校验、48B 输出",
+record("G1-1d BindId domain separation (H_B != H != H_L), 16B input checks, 48B output",
        len_ok and canon.H_B(b"x") != canon.H(b"x") and canon.H_B(b"x") != canon.H_L(b"x")
        and len(canon.BindId(RID, certA.id, certA.pk)) == 48)
-record("G1-1e 首登工件 hist+fresh 双 accept",
+record("G1-1e initial artifact accepts hist+fresh",
        Q.verify(cfg, S1, "hist") == "accept_historical"
        and fresh(S1, n32, snap=snap0) == "accept_fresh")
 
-# ---- G1-2 相同证书重用（同参重发 → 同正文证书）----
+# ---- G1-2 identical-certificate reuse (same params reissued -> same certificate body) ----
 certA_dup = RA.issue(RID[:12] + b"SGNR", pkA, b"signer", ((RID,), b"*"), 0, 1 << 62)
-record("G1-2 相同参数重发 = 同证书正文（重用不改变绑定）",
+record("G1-2 same parameters reissued = same certificate body (reuse does not change the binding)",
        certA_dup.msg == certA.msg and certA_dup.verify(RA.pk)
        and RA.reg[RID]["bid"] == canon.BindId(RID, certA.id, pkA)
        and fresh(S1, snap=snap0) == "accept_fresh")
 
-# ---- G1-3 同 RID 同 (ID,PK) 合法续签：新有效期/新正文/新管理员签名 ----
+# ---- G1-3 legitimate renewal, same RID and (ID,PK): new validity window/body/administrator signature ----
 certA2 = RA.issue(certA.id, certA.pk, b"signer", ((RID,), b"*"), 0, 1 << 63)
-record("G1-3a 续签签发成功且正文/管理员签名互异（同 id+pk、新有效期）",
+record("G1-3a renewal issued, body/administrator signature both differ (same id+pk, new validity)",
        certA2.id == certA.id and certA2.pk == certA.pk
        and certA2.msg != certA.msg and certA2.sig != certA.sig
        and certA2.verify(RA.pk) and certA2.na == 1 << 63)
-record("G1-3b reg.cid 保持首登正文摘要（历史语义不变）、bid 不随续签变",
+record("G1-3b reg.cid keeps the initial body digest (historical semantics unchanged); bid unchanged by renewal",
        RA.reg[RID]["cid"] == canon.H(certA.msg)
        and canon.H(certA2.msg) != RA.reg[RID]["cid"]
        and RA.reg[RID]["bid"] == canon.BindId(RID, certA.id, pkA))
 S1r = clone_with_signer(S1, skA, certA2)
-record("G1-3c 续签证书工件 hist accept", Q.verify(cfg, S1r, "hist") == "accept_historical")
-record("G1-3d 续签证书工件 fresh accept（修复验收：不再因 cid 变化错拒）",
+record("G1-3c renewed-certificate artifact accepts hist", Q.verify(cfg, S1r, "hist") == "accept_historical")
+record("G1-3d renewed-certificate artifact accepts fresh (fix acceptance: no longer wrongly rejected because cid changed)",
        fresh(S1r, snap=snap0) == "accept_fresh")
 
-# ---- G1-4 原证书工件在续签后 fresh 仍 accept ----
-record("G1-4 原证书工件续签后 fresh 仍 accept（cid/bid 均不随续签漂移）",
+# ---- G1-4 original-certificate artifact still accepts fresh after renewal ----
+record("G1-4 original artifact still accepts fresh after renewal (neither cid nor bid drifts)",
        fresh(S1, snap=snap0) == "accept_fresh"
        and Q.verify(cfg, S1, "hist") == "accept_historical")
 
-# ---- G1-5 换 ID 或换 PK：签发拒绝 + 工件不接受 ----
+# ---- G1-5 different ID or PK: issuance refused + artifact not accepted ----
 skB, pkB = B1.keygen()
-vr("G1-5a 换 ID 续签同 RID 签发拒（IssuanceRefused）",
+vr("G1-5a renewal with a different ID for the same RID refused at issuance (IssuanceRefused)",
    lambda: RA.issue(b"\x77" * 16, pkA, b"signer", ((RID,), b"*"), 0, 1 << 62),
    step=None, exc=Q.IssuanceRefused)
-vr("G1-5b 换 PK 续签同 RID 签发拒（IssuanceRefused）",
+vr("G1-5b renewal with a different PK for the same RID refused at issuance (IssuanceRefused)",
    lambda: RA.issue(certA.id, pkB, b"signer", ((RID,), b"*"), 0, 1 << 62),
    step=None, exc=Q.IssuanceRefused)
-# 白盒换证工件（文档化 PKI 共谋边界）：hist 可过（诚实 RA 不会签此证），
-# fresh 因 V9 bid 绑定拒——这正是 cid→bid 修复的验签侧语义。
+# White-box swapped-certificate artifact (documented PKI collusion boundary):
+# hist can pass (an honest RA would never issue this certificate); fresh is
+# rejected by the V9 bid binding -- exactly the verification-side semantics
+# of the cid->bid fix.
 certD = Q.Cert(b"\x88" * 16, pkA, b"signer", ((RID,), b"*"), 0, 1 << 62, scheme="B1")
 certD.sig = RA._sign(certD.msg, canon.CTX_CERT)
 S1D = clone_with_signer(S1, skA, certD)
-record("G1-5c 白盒换 ID 证 hist 接受（共谋边界，如实记录）",
+record("G1-5c white-box different-ID certificate accepted by hist (collusion boundary, recorded as-is)",
        Q.verify(cfg, S1D, "hist") == "accept_historical")
-vr("G1-5d 白盒换 ID 证 fresh 拒（V9 bid 身份不匹配）", lambda: fresh(S1D, snap=snap0))
+vr("G1-5d white-box different-ID certificate rejected by fresh (V9 bid identity mismatch)", lambda: fresh(S1D, snap=snap0))
 certE = Q.Cert(certA.id, pkB, b"signer", ((RID,), b"*"), 0, 1 << 62, scheme="B1")
 certE.sig = RA._sign(certE.msg, canon.CTX_CERT)
 S1E = clone_with_signer(S1, skB, certE)
-vr("G1-5e 白盒换 PK 证 fresh 拒（V9 bid 身份不匹配）", lambda: fresh(S1E, snap=snap0))
+vr("G1-5e white-box different-PK certificate rejected by fresh (V9 bid identity mismatch)", lambda: fresh(S1E, snap=snap0))
 
-# ---- G1-6 应答域篡改全拒（签名重算层，M_resp5 覆盖全部七域+前缀） ----
+# ---- G1-6 every response-field tampering rejected (signature-recomputation layer; M_resp5 covers all seven fields + prefix) ----
 resp, a_h, a_t, a_ts, a_ep, a_bid = RA.fresh_query(n32, RID)
 xor = lambda b: bytes(x ^ 0xFF for x in b)               # noqa: E731
 ok_tamper = True
@@ -172,45 +181,47 @@ for tampered in (
     canon.M_resp5(n32, RID, a_h, a_t, a_ts, a_ep, a_bid[::-1]),            # bid
     canon.M_resp5(n32, xor(RID), a_h, a_t, a_ts, a_ep, a_bid),             # RID
     canon.M_resp5(xor(n32), RID, a_h, a_t, a_ts, a_ep, a_bid),             # nonce
-    canon.M_resp5(n32, RID, a_h[::-1], a_t, a_ts, a_ep, a_bid),             # 链头 h*
+    canon.M_resp5(n32, RID, a_h[::-1], a_t, a_ts, a_ep, a_bid),             # chain head h*
     canon.M_resp5(n32, RID, a_h, a_t + 1, a_ts, a_ep, a_bid),               # t*
     canon.M_resp5(n32, RID, a_h, a_t, a_ts + 1, a_ep, a_bid),               # ts
     canon.M_resp5(n32, RID, a_h, a_t, a_ts, a_ep + 1, a_bid),               # epoch
     b"QPRSS-v4|resp" + canon.M_resp5(n32, RID, a_h, a_t, a_ts, a_ep,
-                                     a_bid)[13:],                            # v4 前缀
+                                     a_bid)[13:],                            # v4 prefix
 ):
     if B1.verify(RA.pk, tampered, resp, canon.CTX_ANC):
         ok_tamper = False
-record("G1-6 应答任一域篡改（bid/RID/nonce/h*/t*/ts/epoch/前缀）验签全拒", ok_tamper)
-# verify 层无应答注入口（fresh 应答只由验证器现场向 RA 查询获得）：
-# 外部应答不可作为参数传入 ⇒ 重放在验证器接口层无攻击面（结构性保证）。
+record("G1-6 any tampered response field (bid/RID/nonce/h*/t*/ts/epoch/prefix) fails signature verification", ok_tamper)
+# The verify layer has no response-injection parameter (the fresh response is
+# obtained only by the verifier querying the RA live): an external response
+# cannot be passed in => no replay surface at the verifier interface
+# (structural guarantee).
 try:
     Q.verify({"pk_ra": RA.pk}, S1, "fresh", ra=RA, nonce=n32, revsnap=snap0,
              resp=resp)
-    record("G1-6b 验证器无应答注入口（外部应答不可传入 ⇒ 无重放面）", False,
+    record("G1-6b verifier has no response-injection parameter (external response cannot be passed in => no replay surface)", False,
            "accepted(!)")
 except TypeError:
-    record("G1-6b 验证器无应答注入口（外部应答不可传入 ⇒ 无重放面）", True)
+    record("G1-6b verifier has no response-injection parameter (external response cannot be passed in => no replay surface)", True)
 
-# ---- G1-7 M_resp5 字节布局（逐域偏移；177B 与 v4 等长）----
+# ---- G1-7 M_resp5 byte layout (per-field offsets; 177B, same length as v4) ----
 m5 = canon.M_resp5(n32, RID, a_h, a_t, a_ts, a_ep, a_bid)
-record("G1-7 M_resp5 布局 13+32+16+48+4+8+8+48=177（域偏移逐一命中）",
+record("G1-7 M_resp5 layout 13+32+16+48+4+8+8+48=177 (every field offset hits)",
        len(m5) == 177 and m5[:13] == b"QPRSS-v5|resp"
        and m5[13:45] == n32 and m5[45:61] == RID and m5[61:109] == a_h
        and m5[109:113] == canon.enc32(a_t) and m5[113:121] == canon.enc64(a_ts)
        and m5[121:129] == canon.enc64(a_ep) and m5[129:177] == a_bid)
 
-# ================= 链推进（G2 快照需 t≥1，否则回滚无从谈起） =================
+# ================= Chain advance (G2 snapshots need t>=1, otherwise rollback is moot) =================
 P1 = pol.Policy(P0.adm, P0.w - {4}, P0.d - 1, N)
 S2 = Q.redact(pp, S1, set(range(1, N + 1)) - {2}, P1, c_n, sk_n, 100)
 m_reg = canon.M_reg(RID, RA.reg[RID]["ver"], RA.reg[RID]["h"],
                     RA.reg[RID]["ver"] + 1, S2.h_t, len(S2.log),
                     canon.H(c_n.msg), c_n.id, c_n.role)
 RA.register(S2, B1.sign(sk_n, pk_n, m_reg, canon.CTX_REG), c_n)
-record("G0 链推进后 reg t=1/ver=1（G2 前置）",
+record("G0 after chain advance reg t=1/ver=1 (precondition for G2)",
        RA.reg[RID]["t"] == 1 and RA.reg[RID]["ver"] == 1)
 
-# ================= 任务 2：G2 旧状态恢复 fail-closed =================
+# ================= Task 2: G2 fail-closed restoration of old state =================
 snap_full = json.loads(RA.snapshot())
 
 
@@ -252,18 +263,18 @@ def set_cid_none(o):
 
 
 r1 = try_restore(variant(del_signers))
-record("G2-1 旧快照缺 signers → RestoreRefused（不解释为空登记态）",
+record("G2-1 old snapshot missing signers -> RestoreRefused (not interpreted as an empty registry)",
        r1[0] == "RestoreRefused", r1[1])
 r2 = try_restore(variant(del_cid))
-record("G2-2 旧快照 reg 缺 cid → RestoreRefused（非 KeyError 泄漏）",
+record("G2-2 old snapshot reg missing cid -> RestoreRefused (no KeyError leak)",
        r2[0] == "RestoreRefused", r2[1])
 r3 = try_restore(variant(del_bid))
-record("G2-3 旧快照 reg 缺 bid → RestoreRefused", r3[0] == "RestoreRefused", r3[1])
+record("G2-3 old snapshot reg missing bid -> RestoreRefused", r3[0] == "RestoreRefused", r3[1])
 r4 = try_restore(variant(set_cid_none))
-record("G2-3b reg.cid=None（一轮旧形制）→ RestoreRefused", r4[0] == "RestoreRefused",
+record("G2-3b reg.cid=None (older format) -> RestoreRefused", r4[0] == "RestoreRefused",
        r4[1])
 r5 = try_restore(variant(del_ver))
-record("G2-4 无版本号快照（冻结时代形制）→ RestoreRefused", r5[0] == "RestoreRefused",
+record("G2-4 versionless snapshot (frozen-era format) -> RestoreRefused", r5[0] == "RestoreRefused",
        r5[1])
 try:
     Q.RA.restore(b"not-json{")
@@ -272,18 +283,18 @@ except Q.RestoreRefused as e:
     r6 = ("RestoreRefused", str(e)[:80])
 except Exception as e:                              # noqa: BLE001
     r6 = (type(e).__name__, str(e)[:80])
-record("G2-4b 非 JSON/截断 blob → RestoreRefused（非崩溃）", r6[0] == "RestoreRefused",
+record("G2-4b non-JSON/truncated blob -> RestoreRefused (not a crash)", r6[0] == "RestoreRefused",
        r6[1])
 
 
-# ---- G2-5 登记状态冲突：signers 绑定与 reg.bid 互斥 ----
+# ---- G2-5 registry-state conflict: signers binding vs reg.bid mutual exclusion ----
 def conflict_signer(o):
     i = bytes.fromhex(o["signers"][0][1])
     o["signers"][0][1] = (i[:15] + b"\x99").hex()
 
 
 def unregistered_binding(o):
-    """issue-only 中间态：RID 有绑定、无登记（去掉 reg/log 中 RID 的痕迹）。"""
+    """Issue-only intermediate state: the RID has a binding but no registration (all traces of the RID removed from reg/log)."""
     del o["reg"][RID.hex()]
     o["log"] = [e for e in o["log"] if e[0] != RID.hex()]
 
@@ -294,72 +305,79 @@ def fake_bound_unregistered(o):
 
 
 r7 = try_restore(variant(conflict_signer))
-record("G2-5 signers 绑定异于 reg.bid（身份冲突）→ RestoreRefused",
+record("G2-5 signers binding differs from reg.bid (identity conflict) -> RestoreRefused",
        r7[0] == "RestoreRefused", r7[1])
-# 反方向：signers 绑定未登记 rid = issue 先于 RegisterInitial 的合法中间态，
-# 可恢复；但绑定若指向异 (id,pk)，其上 RegisterInitial 被 I1-bnd 拒。
+# The other direction: a signers binding for an unregistered rid is a legal
+# intermediate state (issue before RegisterInitial) and restores fine; but if
+# the binding points to a different (id,pk), RegisterInitial on it is
+# rejected by I1-bnd.
 r8 = try_restore(variant(unregistered_binding))
-record("G2-5b issue-only 中间态（绑定未登记 rid）可恢复", r8[0] == "ok", r8[1])
+record("G2-5b issue-only intermediate state (binding to an unregistered rid) restores", r8[0] == "ok", r8[1])
 ra_io = Q.RA.restore(json.dumps(variant(fake_bound_unregistered)).encode())
-vr("G2-5c 恢复态上异 (id,pk) RegisterInitial 拒（I1-bnd）",
+vr("G2-5c RegisterInitial with a different (id,pk) on the restored state rejected (I1-bnd)",
    lambda: ra_io.register_initial(S1, certA, sig_init), "I1-bnd",
    exc=Q.RedactRefused)
 
 
-# ---- G2-6 恶意回滚：只回滚 reg（或只删 log 尾）→ 拒 ----
+# ---- G2-6 malicious rollback: roll back reg only (or drop the log tail) -> refused ----
 def rollback_reg(o):
-    o["reg"][RID.hex()]["t"] = 0                    # reg 回滚，log 尾仍是真值
+    o["reg"][RID.hex()]["t"] = 0                    # reg rolled back, log tail still truthful
 
 
 def drop_log_tail(o):
-    o["log"] = o["log"][:-1]                        # 删尾条（证据缺失）
+    o["log"] = o["log"][:-1]                        # drop the tail entry (missing evidence)
 
 
 r9 = try_restore(variant(rollback_reg))
-record("G2-6a 恶意回滚 reg（log 未回滚）→ RestoreRefused", r9[0] == "RestoreRefused",
+record("G2-6a malicious reg rollback (log not rolled back) -> RestoreRefused", r9[0] == "RestoreRefused",
        r9[1])
 r10 = try_restore(variant(drop_log_tail))
-record("G2-6b 删除登记日志尾条（证据缺失）→ RestoreRefused",
+record("G2-6b dropping the registration-log tail entry (missing evidence) -> RestoreRefused",
        r10[0] == "RestoreRefused", r10[1])
 
-# ---- G2-7 完整新快照恢复：可用、唯一绑定保持、fresh 通 ----
+# ---- G2-7 full new-snapshot restore: usable, unique binding kept, fresh passes ----
 RA2 = Q.RA.restore(RA.snapshot())
-record("G2-7a 完整新快照恢复成功（reg/log/signers/epoch 保真）",
+record("G2-7a full new-snapshot restore succeeds (reg/log/signers/epoch faithful)",
        RA2.reg[RID]["bid"] == canon.BindId(RID, certA.id, pkA)
        and RA2.reg[RID]["cid"] == canon.H(certA.msg)
        and RA2.signers == RA.signers and RA2.epoch == RA.epoch)
-vr("G2-7b 恢复后换 (id,pk) 签发同 RID 拒（唯一绑定不可绕过）",
+vr("G2-7b after restore, issuing for the same RID under a different (id,pk) refused (unique binding cannot be bypassed)",
    lambda: RA2.issue(b"\x77" * 16, pkB, b"signer", ((RID,), b"*"), 0, 1 << 62),
    step=None, exc=Q.IssuanceRefused)
-record("G2-7c 恢复后同 (id,pk) 续签仍合法（不误伤）",
+record("G2-7c after restore, renewal with the same (id,pk) still legal (no false rejection)",
        RA2.issue(certA.id, certA.pk, b"signer", ((RID,), b"*"), 1, 1 << 62)
        .verify(RA2.pk))
-record("G2-7d 恢复后 fresh accept（M_resp5+bid 链完整，t=1 工件）",
+record("G2-7d after restore fresh accept (M_resp5+bid chain intact, t=1 artifact)",
        Q.verify({"pk_ra": RA2.pk}, S2, "fresh", ra=RA2, nonce=os.urandom(32),
                 revsnap=RA2.revocation_snapshot()) == "accept_fresh")
 
-# ---- G2-8 身份替换闭环：旧路径（恢复旧快照→第二证→换证工件）由接受变拒绝 ----
-# 冻结/一轮实现的攻击链（Task G/Q2 探针实证）：缺字段旧快照恢复为空 signers
-# → 同 RID 异 (id,pk) 第二张 signer 证书诚实签出 → 换证工件 hist 复活。
-# 本轮：链首（restore）即 RestoreRefused，后续 issue/hist 无从发生。
+# ---- G2-8 identity-substitution loop closed: the old path (restore old
+# snapshot -> second certificate -> swapped-certificate artifact) flips from
+# accepted to rejected ----
+# Attack chain against the frozen/first-round implementation (probe-verified):
+# a field-stripped old snapshot restored with empty signers -> a second
+# signer certificate for the same RID under a different (id,pk) honestly
+# issued -> swapped-certificate artifact revived under hist.
+# Now: the chain head (restore) itself raises RestoreRefused, so the later
+# issue/hist steps can never happen.
 attacker_states = [variant(del_signers), variant(del_cid, del_bid), variant(del_ver)]
 closed = all(try_restore(s)[0] == "RestoreRefused" for s in attacker_states)
-record("G2-8 身份替换攻击链在恢复入口闭合（accept→RestoreRefused）", closed,
-       f"{len(attacker_states)} 个旧形制快照全拒")
+record("G2-8 identity-substitution attack chain closed at the restore entry (accept->RestoreRefused)", closed,
+       f"all {len(attacker_states)} old-format snapshots rejected")
 
-# ---- G2-9 不完整状态拒签发（_require_complete 门）----
+# ---- G2-9 incomplete state refuses issuance (_require_complete gate) ----
 ra_inc = Q.RA("B1")
 ra_inc._complete = False
-vr("G2-9a 不完整 RA 状态 issue 拒（IssuanceRefused）",
+vr("G2-9a issue on incomplete RA state refused (IssuanceRefused)",
    lambda: ra_inc.issue(b"\x11" * 16, pkB, b"signer", ((RID,), b"*"), 0, 1 << 62),
    step=None, exc=Q.IssuanceRefused)
-vr("G2-9b 不完整 RA 状态 fresh_query 拒",
+vr("G2-9b fresh_query on incomplete RA state refused",
    lambda: ra_inc.fresh_query(n32, RID), step=None, exc=Q.IssuanceRefused)
-vr("G2-9c 不完整 RA 状态 register_initial 拒",
+vr("G2-9c register_initial on incomplete RA state refused",
    lambda: ra_inc.register_initial(S1, certA, sig_init), step=None,
    exc=Q.IssuanceRefused)
 
-# ---- G2-10 多线程签发同 RID：唯一绑定恰好一个赢家 ----
+# ---- G2-10 multithreaded issuance for the same RID: exactly one winner of the unique binding ----
 RA3 = Q.RA("B1")
 keys = [B1.keygen() for _ in range(8)]
 results = []
@@ -383,11 +401,12 @@ for t in threads:
     t.start()
 for t in threads:
     t.join()
-record("G2-10 多线程 8 路同 RID 异 (id,pk) 签发：恰 1 成功且绑定唯一",
+record("G2-10 8-thread issuance for the same RID with distinct (id,pk): exactly 1 succeeds and the binding is unique",
        sum(results) == 1 and len(RA3.signers) == 1,
        f"ok={sum(results)}/8, bound={len(RA3.signers)}")
 
-# 已绑定后并发续签同 (id,pk)：全部允许（同身份合法），状态无竞态损坏
+# Concurrent renewal with the same (id,pk) after binding: all allowed (same
+# identity, legal); no racy state corruption
 bound_id, bound_pk = next(iter(RA3.signers.values()))
 results2 = []
 
@@ -407,7 +426,7 @@ for t in threads:
     t.start()
 for t in threads:
     t.join()
-record("G2-10b 绑定后 8 路并发同 (id,pk) 续签全成功且快照仍合法",
+record("G2-10b after binding, 8 concurrent renewals with the same (id,pk) all succeed and the snapshot stays valid",
        all(results2) and len(RA3.signers) == 1
        and try_restore(json.loads(RA3.snapshot()))[0] == "ok")
 

@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
-"""F5 = 表 VI 深链传输对比：QPRSS vs 普通顺序全文签名链（L 链）。
+"""F5 = Table VI deep-chain transfer comparison: QPRSS vs a plain
+sequential full-document signature chain (L chain).
 
-组合 n=64,t=63（W={2..64} 删空）与 n=102,t=80。
-  Q  = len(Sigma.serialize())（完整发布签名，ver=2）；
-  L  = σ0 + Σ_{i=1..t}(τ_i + doc_i + pk_i + meta)——历史核查须出示全部
-       中间全文文档（l_chain.l_verify 语义）；doc_i = 删后剩余字段并置
-       （32B/字段）；pk_i = 各跳验证公钥 3,712B（L 链无证书层，公钥
-       须随文档出示）；meta = 16B 删改者自述。
-旧表 VI 数值（398,793/639,789/519,356/845,832）为历史基线参照，
-且既有审计（QPRSS_Final_Freeze_Gates Q4）已认定旧值"非旧非规范"——
-本轮为规范重测。
+Combos n=64,t=63 (W={2..64} fully redacted) and n=102,t=80.
+  Q  = len(Sigma.serialize()) (full published signature, ver=2);
+  L  = sigma0 + sum_{i=1..t}(tau_i + doc_i + pk_i + meta) - historical
+       verification must present every intermediate full document
+       (l_chain.l_verify semantics); doc_i = the fields remaining after
+       the i-th redaction, concatenated (32 B/field); pk_i = per-hop
+       verification public key, 3,712 B (the L chain has no certificate
+       layer, so keys travel with the documents); meta = 16 B redactor
+       self-description.
+The old Table VI numbers (398,793/639,789/519,356/845,832) are a
+historical baseline; a prior audit judged them non-canonical, so this
+run is the canonical re-measurement.
 """
 import csv
 import hashlib
@@ -64,7 +68,7 @@ def run_combo(n, t):
                   schema_digest=sdig, sig_rng=s4c.FixedXofRng(sdp + b"|sg0"))
     vcfg = {"pk_ra": ra.pk}
     assert Q.verify(vcfg, S, "hist")
-    # L 链：原始全文签名（与 Q 同一 B1 核、同 rng 语义）
+    # L chain: origin full-document signature (same B1 core, same rng semantics as Q)
     doc = b"".join(ys[j] for j in sorted(ys))
     sig0 = LC.l_sign_origin(sk_s, pk_s, doc,
                             rng=s4c.FixedXofRng(sdp + b"|L0"))
@@ -73,7 +77,7 @@ def run_combo(n, t):
     h = LC.h_doc(doc)
     P = P0
     for i in range(1, t + 1):
-        j = i + 1                                           # 与 Q 同删除序
+        j = i + 1                                           # same deletion order as Q
         Pn = pol.Policy(P.adm, P.w, P.d - 1, n, m=P.M, ver=V2)
         S = Q.redact(pp, S, set(S.It) - {j}, Pn, cert_r, sk_r, 30_000 + i,
                      sig_rng=s4c.FixedXofRng(sdp + b"|rd%d" % i))
@@ -84,8 +88,8 @@ def run_combo(n, t):
                           rng=s4c.FixedXofRng(sdp + b"|L%d" % i))
         L += len(tau) + len(doc) + PK_LEN + len(meta)
         hops_meta.append((i, len(doc), len(tau)))
-    assert Q.verify(vcfg, S, "hist")                        # Q 链合法
-    # L 链可验证性抽查（全文并置 + 公钥）
+    assert Q.verify(vcfg, S, "hist")                        # Q chain still valid
+    # L-chain verifiability spot-check scaffolding (full docs + keys)
     hops = []
     S2 = None
     return dict(n=n, t=t, Q_bytes=len(S.serialize()), L_bytes=L,
@@ -96,9 +100,9 @@ def run_combo(n, t):
 def main():
     combos = [run_combo(64, 63), run_combo(102, 80)]
     for c in combos:
-        save = (c["L_bytes"] - c["Q_bytes"]) / c["L_bytes"]   # 较 L 链节省
+        save = (c["L_bytes"] - c["Q_bytes"]) / c["L_bytes"]   # saving vs L chain
         print(f"n={c['n']}, t={c['t']}: Q={c['Q_bytes']:,} B  "
-              f"L={c['L_bytes']:,} B  较 L 链节省 {save * 100:.1f}%")
+              f"L={c['L_bytes']:,} B  saving vs L chain {save * 100:.1f}%")
     csv_path = os.path.join(ROOT, "results", "summary", "f5_tablevi_vs_lchain.csv")
     js_path = os.path.join(ROOT, "results", "summary", "f5_tablevi_vs_lchain.json")
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
@@ -113,8 +117,11 @@ def main():
                                     ts=time.strftime("%Y-%m-%dT%H:%M:%S")),
                    combos=combos,
                    notes=["Q=len(Sigma.serialize()) ver=2",
-                          "L=σ0+Σ(τ+全文doc+pk+meta)（历史核查须出示全部中间文档）",
-                          "旧表 VI 值经终检审计判非规范，本轮为规范重测基线"])
+                          "L = sigma0 + sum(tau + full doc + pk + meta) "
+                          "(historical verification must present all "
+                          "intermediate documents)",
+                          "old Table VI values were judged non-canonical by "
+                          "a prior audit; this run is the canonical baseline"])
     with open(js_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=1)
     print(f"\nF5_DONE csv={csv_path}\n       json={js_path}")

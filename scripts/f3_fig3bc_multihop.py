@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
-"""F3 = 图 3(b)(c) 多跳可扩展性：n=64/102，t=0..40 连续删改链，5 种子。
+"""F3 = Fig. 3(b)(c) multi-hop scalability: n=64/102, t=0..40 continuous
+redaction chain, 5 seeds.
 
-- (b) 单跳 Redact 耗时 vs t（含审计签名，[0276] 口径）；
-- (c) Verify 耗时 vs t——hist 与 fresh 分项计时（任务书：不得混为一项）。
-  fresh 计时含管理员应答签名/验签/状态检查（verify("fresh") 整体），
-  不含真实网络往返（无网络部署，不宣称端到端时延）。
-每种子一条连续链：t=0 登记 register_initial，之后每跳 redact（删字段
-2+t）+ register（fresh 链头推进），随后各计时 hist/fresh 各一次。
+- (b) single-hop Redact time vs t (includes the audit signature);
+- (c) Verify time vs t - hist and fresh timed separately (per the
+  experiment protocol; they must not be merged into one number).
+  The fresh timing covers the RA response signature, its verification
+  and the status check (the whole verify("fresh") call), but no real
+  network round-trip (no network deployment; no end-to-end latency
+  claim).
+One continuous chain per seed: t=0 registers via register_initial, then
+each hop redacts field 2+t and calls register (advancing the fresh
+chain head), after which hist and fresh are each timed once.
 """
 import csv
 import hashlib
@@ -76,7 +81,7 @@ def main():
         for seed in range(1, NSEEDS + 1):
             pp, ra, sk_s, cert_s, sk_r, cert_r, S, P, vcfg = world(n, seed)
             rid_state = ra.reg[RID]
-            # t=0：hist/fresh 各一次正式计时
+            # t=0: one formal timing each for hist/fresh
             t0 = time.perf_counter_ns()
             assert Q.verify(vcfg, S, "hist") == "accept_historical"
             th = (time.perf_counter_ns() - t0) / 1e6
@@ -88,7 +93,7 @@ def main():
             rows.append([n, seed, 0, "verify_fresh", tf])
             print(f"n={n} seed={seed} t=0  hist {th:7.2f} ms  fresh {tf:7.2f} ms")
             for t in range(1, T_MAX + 1):
-                j = t + 1                                   # 删字段 2,3,…,41
+                j = t + 1                                   # delete fields 2,3,...,41
                 keep = set(S.It) - {j}
                 Pn = pol.Policy(P.adm, P.w, P.d - 1, n, m=P.M, ver=V2)
                 t0 = time.perf_counter_ns()
@@ -124,7 +129,7 @@ def main():
         w = csv.writer(f)
         w.writerow(["n", "seed", "t", "op", "ms"])
         w.writerows(rows)
-    # 逐 (n, t, op) 五种子均值汇总（论文口径：连续链+5 种子）
+    # per-(n, t, op) mean over the 5 seeds (paper regime: continuous chain, 5 seeds)
     cells = {}
     for n in (64, 102):
         for t in range(0, T_MAX + 1):
@@ -139,11 +144,14 @@ def main():
                                     processor=platform.processor(),
                                     ts=time.strftime("%Y-%m-%dT%H:%M:%S")),
                    regime="continuous chain x 5 seeds; hist/fresh timed "
-                          "separately [task §六F3]",
+                          "separately",
                    cells=cells,
-                   notes=["redact 含审计签名 [0276]", "fresh 含 RA 应答签名/验签/状态检查，"
-                          "无网络往返（不宣称端到端时延）",
-                          "每跳先 redact→register（不计时）再分别计时 hist/fresh"])
+                   notes=["redact timing includes the audit signature",
+                          "fresh timing includes the RA response signature, "
+                          "verification and status check; no network "
+                          "round-trip (no end-to-end latency claim)",
+                          "each hop does redact->register (untimed) first, "
+                          "then times hist/fresh separately"])
     with open(sum_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=1)
     print(f"\nF3_DONE raw={raw_path}\n       summary={sum_path}")

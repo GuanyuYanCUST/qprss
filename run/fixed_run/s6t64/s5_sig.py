@@ -1,35 +1,31 @@
 # -*- coding: utf-8 -*-
-"""Stage-5 签名核注册表：B1-65 自定义 FS（主方案，导师红线）与 ML-DSA-44（对照）。
+"""Signing-core registry: B1-65 custom FS (the paper's core) and ML-DSA-44
+(comparison arm).
 
-统一字节级 API（协议引擎只认这个）：
+Uniform byte-level API (this is the only interface the protocol engine sees):
     keygen() -> (sk_bytes, pk_bytes)
     sign(sk, pk, msg, ctx, rng=None) -> sig_bytes
     verify(pk, msg, sig, ctx) -> bool
     SIG_LEN / PK_LEN
 
-B1 上下文绑定：s4_fs 的 H1 挑战覆盖 (dom, w, msg)；ctx 以显式前缀并入 msg
-（"QPRSS-B1ctx|"<ctx>"|"<msg>），与 dom 参数密码学等价（域分隔），且零改动
-Stage-4 冻结源码（s4_fs/s4_core 以只读方式从 ../RouteB_Stage4_E0实施/src 引入）。
-ML-DSA-44 用 dilithium-py 原生 ctx 参数（FIPS 204 语义）。
+Context binding for B1: the H1 challenge covers (dom, w, msg), so ctx is
+folded into msg as an explicit prefix ("QPRSS-B1ctx|"<ctx>"|"<msg>) —
+cryptographically equivalent to a separate dom argument (domain separation).
+ML-DSA-44 uses dilithium-py's native ctx parameter (FIPS 204 semantics).
 """
-
-# [Stage-5.10.3 τ=64 候选] 本文件 = Stage-5.9 s5_sig.py 副本，两处改动：
-# (1) 删除 Stage-4 冻结目录 sys.path 注入与 import s4_fs——B1 参数依赖改为
-#     随包 .s4dep_core/.s4dep_fs（相对导入，τ=64）；(2) SIG_LEN["B1"] 由
-#     FS 推导 = (k+m)·d·zbits/8 + cbytes = 5760+34 = 5794。B1Core 逻辑、
-#     ctx 前缀绑定、ML-DSA-44 对照路径逐字不变。
 from __future__ import annotations
 
 import os
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# Stage-5.10.3：不再注入 Stage-4 冻结目录——τ=64 参数依赖随包携带。
 
-# Stage-5.9 P0.4：B1 签名核切换到 s4compat（冻结 s4_core.ShakeRng 的 XOF
-# 回放缺陷修复——expand_A/sample_in_ball 的确定性展开走前缀一致 XOF）。
-# 算法、参数、域分隔、编码与 s4_fs 逐字一致；仅随机流连续性语义修复。
-# 冻结路径生成的密钥/签名在本路径下验证 fail-closed 拒绝（A/c 展开不同）。
+# The B1 core routes through s4compat: the fix for the XOF replay defect in
+# the original ShakeRng (deterministic expansions of expand_A/sample_in_ball
+# now draw from a prefix-consistent stream). Algorithm, parameters, domain
+# separation and encodings are unchanged; only the continuity semantics of
+# the random stream differ — keys/signatures produced by the pre-fix path
+# fail closed here (different A/c expansions).
 from . import s4compat as b1  # noqa: E402
 
 from .s4dep_core import FS as _FS64
@@ -40,7 +36,8 @@ PK_LEN = {"B1": 3712, "AS": 1312, "C": 1312, "H": 3712}
 
 
 class B1Core:
-    """B1-65 自定义 Fiat–Shamir-with-aborts（主方案签名核；固定 XOF 路径）。"""
+    """B1-65 custom Fiat–Shamir-with-aborts (the paper's signing core;
+    fixed-XOF path)."""
     name = "B1"
     SIG_LEN = SIG_LEN["B1"]
     PK_LEN = PK_LEN["B1"]
@@ -73,7 +70,9 @@ class B1Core:
 
 
 class MLDSACore:
-    """ML-DSA-44（FIPS 204 参考实现；对照基线 AS/C 的签名核）。"""
+    """ML-DSA-44 (FIPS 204 reference implementation; signing core of the
+    comparison arms AS/C). Requires an external dilithium-py checkout, so
+    this path is optional and not exercised by the packaged tests."""
     name = "MLDSA"
     SIG_LEN = SIG_LEN["AS"]
     PK_LEN = PK_LEN["AS"]
@@ -107,7 +106,8 @@ class MLDSACore:
 
 
 def core(scheme: str):
-    """scheme ∈ {"B1", "H", "AS", "C"} → 签名核。B1/H=自定义 FS（H 仅承诺层消融）；AS/C=ML-DSA-44。"""
+    """scheme ∈ {"B1", "H", "AS", "C"} → signing core. B1/H = the custom FS
+    core (H is the commitment-layer ablation); AS/C = ML-DSA-44."""
     if scheme in ("B1", "H"):
         return B1Core
     if scheme in ("AS", "C"):

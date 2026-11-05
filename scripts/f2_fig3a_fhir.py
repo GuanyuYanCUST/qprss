@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""F2 = 图 3(a) HL7 FHIR 原型：字段数 n=3..12，签名/验证耗时。
+"""F2 = Fig. 3(a) HL7 FHIR prototype: fields n=3..12, sign/verify time.
 
-统计口径 = 论文 [0274]：3 种子 × 每种子 30 次正式重复，按均值聚合。
-ver=2 一般编码（显式 M={1}，n≥3 时 W={2..n} 非空）。合成医疗字段
-（attr_j=A;val_j=V + SHAKE 填充，恰 32B，与 F1 同配方）。
+Regime: 3 seeds x 30 formal reps each, aggregated by mean (same regime
+as the reference scheme's evaluation). ver=2 general encoding (explicit
+M={1}; W={2..n} is non-empty for n>=3). Synthetic medical fields
+(attr_j=A;val_j=V + SHAKE padding, exactly 32 B, same recipe as F1).
 """
 import csv
 import hashlib
@@ -104,10 +105,12 @@ def main():
     summary = dict(environment=dict(python=platform.python_version(),
                                     processor=platform.processor(),
                                     ts=time.strftime("%Y-%m-%dT%H:%M:%S")),
-                   regime="3 seeds x 30 formal reps, mean aggregation [0274]",
+                   regime="3 seeds x 30 formal reps, mean aggregation",
                    cells=cells,
-                   notes=["ver=2 一般编码（显式 M={1}）", "字段=合成 FHIR 32B 记录",
-                          "无离值剔除；逐观测正确性 fail-closed"])
+                   notes=["ver=2 general policy encoding (explicit M={1})",
+                          "fields are synthetic 32 B FHIR records",
+                          "no outlier removal; per-observation correctness "
+                          "checks are fail-closed"])
     with open(sum_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=1)
     print(f"\nF2_DONE raw={raw_path}\n      summary={sum_path}")

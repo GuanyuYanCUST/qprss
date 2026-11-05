@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
-"""F1 = 图 2 QPRSS 五阶段正式复测（论文对齐实现，pol_ver=2 一般编码）。
+"""F1 = Fig. 2 QPRSS five-stage formal timing run (paper-aligned
+implementation, pol_ver=2 general encoding).
 
-方法论镜像 R3.2K3 Q 臂（50 次正式观测/单元取中位数、25 次预热、
-perf_counter_ns、无离值剔除、逐观测正确性 fail-closed），差异仅三处并全部
-登记于输出 JSON：(1) 源 = 论文对齐修复实现（H_cert/BindId/M_resp5/一般
-策略编码 ver=2）；(2) signer 证书 scope 为 RID 枚举（SF-A1 修复后强制，
-工件绝对大小 +17B 级）；(3) 策略为显式 M={1} 的 ver=2 描述符。
-KeyGen = 30 个独立会话（B1-65 keygen，不含 RA），中位数。
+Methodology: median of 50 formal observations per cell, 25 warmup calls,
+perf_counter_ns, no outlier removal, per-observation correctness checks
+that abort on failure. Differences from the earlier pilot runs (all
+recorded in the output JSON): (1) the source is the paper-aligned
+implementation (H_cert/BindId/M_resp5, general policy encoding ver=2);
+(2) the signer certificate scope is an RID enumeration (mandatory since
+the identity-binding fix; adds ~17 B to the artifact); (3) the policy is
+an explicit ver=2 descriptor with M={1}.
+KeyGen = 30 independent sessions (B1-65 keygen, RA excluded), median.
 """
 import csv
 import hashlib
@@ -36,7 +40,8 @@ V2 = pol.POL_VER_GENERAL
 
 
 def gen_fields(F, seed=FIELD_SEED):
-    """K3 fieldgen 同配方：attr_j=A;val_j=V + SHAKE 填充，恰 32B/字段。"""
+    """Field generator, same recipe as the pilot: attr_j=A;val_j=V + SHAKE
+    padding, exactly 32 B per field."""
     out = []
     for j in range(1, F + 1):
         core = f"attr_{j}=A;val_{j}=V".encode()
@@ -47,7 +52,7 @@ def gen_fields(F, seed=FIELD_SEED):
 
 
 def redact_j(F):
-    """K3 规则：j* = ceil(F/2)（1 基）∈ W={2..F}。"""
+    """Redaction target j* = ceil(F/2) (1-based) ∈ W = {2..F}."""
     return (F + 1) // 2
 
 
@@ -167,10 +172,15 @@ def main():
         w.writerow(["op", "F", "obs", "phase", "ms", "payload_B"])
         w.writerows(rows)
     summary["notes"] = [
-        "源=论文对齐修复实现（H_cert/BindId/M_resp5/一般策略 ver=2 显式 M={1}）",
-        "signer 证书 RID 枚举 scope（SF-A1）——与 K3 时期通配 scope 相比工件绝对大小略增",
-        "计时口径同 [0276]：Redact 含审计签名；hist Verify 含证书/原始签名/逐跳验签",
-        "无离值剔除，全部原始观测入 CSV；FAIL 即中止（fail-closed）",
+        "source = paper-aligned implementation (H_cert/BindId/M_resp5, "
+        "general policy ver=2 with explicit M={1})",
+        "signer certificate with RID-enumerated scope - slightly larger "
+        "artifact than the wildcard-scope pilot runs",
+        "timing scope: Redact includes the audit signature; hist Verify "
+        "includes certificates, the original signature and per-hop "
+        "signature checks",
+        "no outlier removal, every raw observation goes into the CSV; "
+        "any FAILED check aborts the run (fail-closed)",
     ]
     with open(sum_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=1)

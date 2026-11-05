@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Stage-5.6 P2-4：三删改者身份独立性测试（Q=B1+C2 主方案 与 H=受控对照 双栈）。
+"""Three-redactor identity-independence test (Q = B1+C2 primary scheme vs
+H = controlled contrast, both stacks).
 
-验证目标（补 Stage-5.5 08号 M5 缺口——此前多删改者语义只在 ML-DSA 核上验过）：
-1. 三个独立身份（physician J=* / admin J={6..30} / nurse J={10}）6 轮真实链，
-   全链 hist 验证 PASS；
-2. 每跳 τ_i 只在**该跳删改者本人的 pk** 下验证通过，在其他删改者 pk 下全部失败
-   （身份不可替换）；
-3. forge_hop 声称他人身份（id=R3 但用 R1 密钥签）→ 诚实 Verify 拒于 V5.4；
-4. 越权删除（nurse 删 {11}，超出 J={10}）→ V7.7；
-5. 序列化往返 + RA fresh。
+Goals (closes the earlier gap where multi-redactor semantics had only been
+exercised on the ML-DSA core):
+1. Three independent identities (physician J=* / admin J={6..30} /
+   nurse J={10}), 6 real chain rounds, whole-chain hist verify PASS;
+2. Each hop's tau_i verifies only under that hop's redactor's own pk and
+   fails under every other redactor's pk (identity cannot be swapped);
+3. forge_hop claiming another identity (id=R3 but signed with R1's key) ->
+   honest Verify rejects at V5.4;
+4. Out-of-scope deletion (nurse deletes {11}, outside J={10}) -> V7.7;
+5. Serialization round-trip + RA fresh.
 
 Run: py -3.11 tests/test_u3_redactors.py
 """
@@ -49,14 +52,15 @@ def expect_reject(name, fn, step):
 
 def run_stack(scheme: str):
     t0 = time.time()
-    n = 12                                          # FHIR schema 全量 12 字段
+    n = 12                                          # full FHIR schema, 12 fields
     rid = bytes([0xC3] * 16)
-    V = frozenset(range(2, 13))                  # 1 = 强制保留
+    V = frozenset(range(2, 13))                  # 1 = mandatory retention
 
     ra = Q.RA(scheme)
     pp = Q.setup(scheme, seed=bytes(range(32))) if scheme == "B1" else Q.setup(scheme)
     sk_s, pk_s = core(scheme).keygen()
-    # SF-A1 适配：signer 证书 scope 显式枚举 RID
+    # Issuance-side scope rule: the signer certificate scope explicitly
+    # enumerates the RID
     cert_s = ra.issue(bytes(16), pk_s, b"signer", ((rid,), b"*"), 0, 2**40)
 
     sd = canon.schema_digest(fhir_codec.SCHEMA[:n])
@@ -65,25 +69,26 @@ def run_stack(scheme: str):
     P0 = Policy(adm0, V, n, n)
     S = Q.signing(pp, sk_s, cert_s, rid, ys, P0, rng=Q.make_rng(b"s56-u3-" + scheme.encode()),
                   schema_digest=sd)
-    record(f"[{scheme}] T1 初始签名（n={n}，σ₀={len(S.sigma0)} B）", len(S.sigma0) == 5794)
+    record(f"[{scheme}] T1 initial signing (n={n}, sigma0={len(S.sigma0)} B)", len(S.sigma0) == 5794)
     sig_init = core(scheme).sign(
         sk_s, pk_s,
         canon.M_reginit(rid, n, S.acc0, P0, canon.H(cert_s.msg), sd=sd), canon.CTX_REG)
     ra.register_initial(S, cert_s, sig_init)
 
-    # 三删改者：R1 physician J=*；R2 admin J={6..9,11,12}；R3 nurse J={10}
+    # Three redactors: R1 physician J=*; R2 admin J={6..9,11,12}; R3 nurse J={10}
     keys, certs = {}, {}
     for tag, role, js in ((1, b"physician", b"*"),
                           (2, b"admin", frozenset({6, 7, 8, 9, 11, 12})),
                           (3, b"nurse", frozenset({10}))):
         sk, pk = core(scheme).keygen()
         keys[tag] = sk
-        # nurse 的 id 须匹配 adm0 枚举模式 (b"\x33"*16,)；physician/admin 走 b"*"
+        # nurse's id must match the adm0 enumeration pattern (b"\x33"*16,); physician/admin use b"*"
         cid_ = b"\x33" * 16 if tag == 3 else bytes([tag]) * 16
         certs[tag] = ra.issue(cid_, pk, role, ((rid,), js), 0, 2**40)
 
-    # 6 轮删改日程（每跳 d−1；W 逐跳收缩；删除索引均在当跳 W ∩ 本人 J 内）
-    #   hop 删改者  删除   W 收紧
+    # 6-round redaction schedule (d-1 each hop; W shrinks per hop; every
+    # deleted index lies in the current W intersect the actor's J)
+    #   hop redactor  delete  W tightened
     plan = [(1, {2}, {3}), (2, {6}, {4}), (3, {10}, {5}), (1, {7}, {8}),
             (2, {11}, {9}), (1, {12}, set())]
     chain = [S]
@@ -96,14 +101,14 @@ def run_stack(scheme: str):
         chain.append(Q.redact(pp, chain[-1], I_new, P_new, certs[who], keys[who],
                               2000 + k))
     St = chain[-1]
-    record(f"[{scheme}] T2 6 轮三删改者真实链生成", len(St.log) == 6, f"t={time.time()-t0:.1f}s")
+    record(f"[{scheme}] T2 real 6-round three-redactor chain built", len(St.log) == 6, f"t={time.time()-t0:.1f}s")
 
-    # 全链 hist 验证
+    # whole-chain hist verify
     ok = Q.verify({"pk_ra": ra.pk}, Q.Sigma.deserialize(St.serialize()), "hist",
                   expected_sd=sd) == "accept_historical"
-    record(f"[{scheme}] T3 全链 hist 验证 PASS（u=3 身份独立）", ok, f"t={time.time()-t0:.1f}s")
+    record(f"[{scheme}] T3 whole-chain hist verify PASS (u=3 identity independence)", ok, f"t={time.time()-t0:.1f}s")
 
-    # 逐跳 τ 身份归属：本人 pk 过、他人 pk 全拒
+    # per-hop tau attribution: passes under the owner's pk, rejected under all others
     h = canon.h0_of(rid, n, St.acc0, P0, sd=sd)
     own_ok, cross_fail = True, True
     for i, (e_bytes, tau, cid) in enumerate(St.log, start=1):
@@ -114,11 +119,12 @@ def run_stack(scheme: str):
             if other.pk != cert.pk:
                 cross_fail &= not core(scheme).verify(other.pk, m, tau, canon.CTX_RED)
         h = canon.hi_of(e_bytes, h)
-    record(f"[{scheme}] T4 τ_i 本人 pk 全过 / 他人 pk 全拒（6 跳×2 交叉）",
+    record(f"[{scheme}] T4 tau_i passes under own pk / rejected under others (6 hops x 2 cross)",
            own_ok and cross_fail)
 
-    # 身份冒充：hop 元数据保留 R3 的 id/role/cid（证书链完好），但 τ 换成
-    # 攻击者（R1 密钥）对同一 M_red 的签名——不持有 R3 密钥者造不出有效 τ → V5.4
+    # Identity spoofing: the hop metadata keeps R3's id/role/cid (certificate
+    # chain intact), but tau is replaced by the attacker's (R1 key) signature
+    # on the same M_red -- without R3's key no valid tau can be made -> V5.4
     Sx = Q.forge_hop(chain[-2], chain[-2].It - {12},
                      Policy(adm0, frozenset(Wcur), dcur, n),
                      certs[3], keys[3], 2999)
@@ -126,19 +132,20 @@ def run_stack(scheme: str):
     m6 = canon.M_red(rid, len(Sx.log), e6, chain[-2].h_t, canon.hi_of(e6, chain[-2].h_t))
     tau_att = core(scheme).sign(keys[1], certs[1].pk, m6, canon.CTX_RED)
     Sx.log[-1] = (e6, tau_att, cid6)
-    expect_reject(f"[{scheme}] T5 身份冒充（R3 名义 R1 密钥 τ）→ V5.4",
+    expect_reject(f"[{scheme}] T5 identity spoofing (R3's name, R1's key, tau) -> V5.4",
                   lambda: Q.verify({"pk_ra": ra.pk}, Sx, "hist"), "V5.4")
 
-    # 越权：nurse（J={10}）删 {12}（chain[-2] 当跳 W 含 12；本人密钥诚实签）→ V7.7
+    # Out of scope: nurse (J={10}) deletes {12} (chain[-2]'s current W
+    # contains 12; own key signs honestly) -> V7.7
     Sy = Q.forge_hop(chain[-2], chain[-2].It - {12},
                      Policy(adm0, frozenset(Wcur), dcur, n),
                      certs[3], keys[3], 3000)
-    expect_reject(f"[{scheme}] T6 nurse 越权删 {{12}} → V7.7",
+    expect_reject(f"[{scheme}] T6 nurse out-of-scope delete {{12}} -> V7.7",
                   lambda: Q.verify({"pk_ra": ra.pk}, Sy, "hist"), "V7.7")
 
-    # 序列化往返 + RA fresh
+    # serialization round-trip + RA fresh
     bt = St.serialize()
-    record(f"[{scheme}] T7 序列化往返逐字节一致（{len(bt)} B）",
+    record(f"[{scheme}] T7 serialization round-trip byte-identical ({len(bt)} B)",
            Q.Sigma.deserialize(bt).serialize() == bt)
     m = canon.M_reg(rid, ra.reg[rid]["ver"], ra.reg[rid]["h"],
                     ra.reg[rid]["ver"] + 1, St.h_t, 6,
