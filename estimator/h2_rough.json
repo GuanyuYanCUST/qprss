@@ -1,0 +1,212 @@
+{
+ "meta": {
+  "stage": "rough",
+  "timestamp": "2026-10-19T17:00:32.070999",
+  "estimator_commit": "53da5982597709ba0fdf94ea37a84d822310fd84",
+  "estimator_path": "/mnt/d/year/2024/成果/后量子基于策略的可编辑签名/大修/Step1.6_安全可行性闸门/tests/lattice-estimator",
+  "crlf_strip_blob_equal": "0/17 (0 => all equal)",
+  "sage_version": "passagemath version 10.6.48, Release Date: 2026-02-01",
+  "python": "3.10.12",
+  "uname": "Linux WIN-1UMSH9U2OME 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux",
+  "cost_model_note": "rough = Core-SVP: classical 2^(0.292*beta), quantum 2^(0.265*beta) — estimator repo convention (reduction.py; ADPS16 + repo self-erratum 0.265). full = repo default cost model (not Core-SVP; separate column)."
+ },
+ "rows": [
+  {
+   "inst": "anchor_Kyber512_doctest",
+   "kind": "LWE",
+   "status": "ok",
+   "best_attack": "dual_hybrid",
+   "classical_log2": 115.50989392453226,
+   "beta": 395.0,
+   "quantum_log2": 104.67500000000001,
+   "wall_s": 1.9,
+   "raw": {
+    "usvp": {
+     "rop": "4.87200859686321e35",
+     "red": "4.87200859686321e35",
+     "delta": "1.00394119009209",
+     "beta": "406",
+     "d": "998",
+     "tag": "usvp",
+     "problem": "LWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512')"
+    },
+    "dual_hybrid": {
+     "rop": "5.91483817573970e34",
+     "problem": "LWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512')",
+     "red": "5.25774718923326e34",
+     "guess": "6.57090986506434e33",
+     "beta": "395",
+     "p": "5",
+     "zeta": "0",
+     "t": "40",
+     "beta_": "395",
+     "N": "3.21649467440461e24",
+     "m": "512"
+    }
+   },
+   "ts": "2026-10-19T17:00:12"
+  },
+  {
+   "inst": "sanity_lwe_small",
+   "kind": "LWE",
+   "status": "ok",
+   "best_attack": "dual_hybrid",
+   "classical_log2": 127.62249863805022,
+   "beta": 437.0,
+   "quantum_log2": 115.805,
+   "wall_s": 2.5,
+   "raw": {
+    "usvp": {
+     "rop": "9.88200851831716e39",
+     "red": "9.88200851831716e39",
+     "delta": "1.00363919112671",
+     "beta": "455",
+     "d": "1204",
+     "tag": "usvp",
+     "problem": "LWEParameters(n=640, q=16385, Xs=D(σ=0.82), Xe=D(σ=3.00), m=1000000, tag='sanity_lwe')"
+    },
+    "dual_hybrid": {
+     "rop": "4.9528650e38*e^(-5) + 2.58601813839135e38",
+     "problem": "LWEParameters(n=640, q=16385, Xs=D(σ=0.82), Xe=D(σ=3.00), m=1000000, tag='sanity_lwe')",
+     "red": "2.58601813839135e38",
+     "guess": "4.9528650e38*e^(-5)",
+     "beta": "437",
+     "p": "3",
+     "zeta": "10",
+     "t": "50",
+     "beta_": "437",
+     "N": "1.91112377997087e27",
+     "m": "640"
+    }
+   },
+   "ts": "2026-10-19T17:00:16"
+  },
+  {
+   "inst": "pk_MLWE_n1280",
+   "kind": "LWE",
+   "status": "ok",
+   "best_attack": "dual_hybrid",
+   "classical_log2": 147.1684261366512,
+   "beta": 504.0,
+   "quantum_log2": 133.56,
+   "wall_s": 3.0,
+   "paper_claim": "147.2 / 133.6",
+   "raw": {
+    "usvp": {
+     "rop": "4.17343623966503e45",
+     "red": "4.17343623966503e45",
+     "delta": "1.00331463042868",
+     "beta": "519",
+     "d": "2405",
+     "tag": "usvp",
+     "problem": "LWEParameters(n=1280, q=8380417, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1280, tag='h2_pk_mlwe')"
+    },
+    "dual_hybrid": {
+     "rop": "8.7880659e42*e^(-5) + 2.00439080544658e44",
+     "problem": "LWEParameters(n=1280, q=8380417, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1280, tag='h2_pk_mlwe')",
+     "red": "2.00439080544658e44",
+     "guess": "8.7880659e42*e^(-5)",
+     "beta": "504",
+     "p": "3",
+     "zeta": "10",
+     "t": "60",
+     "beta_": "504",
+     "N": "2.47582857908659e31",
+     "m": "1280"
+    }
+   },
+   "ts": "2026-10-19T17:00:19"
+  },
+  {
+   "inst": "hide_MLWE_n1024",
+   "kind": "LWE",
+   "status": "ok",
+   "best_attack": "dual_hybrid",
+   "classical_log2": 197.49491962553543,
+   "beta": 676.0,
+   "quantum_log2": 179.14000000000001,
+   "wall_s": 4.0,
+   "paper_claim": "197.5 / 179.1",
+   "raw": {
+    "usvp": {
+     "rop": "3.84893182404593e62",
+     "red": "3.84893182404593e62",
+     "delta": "1.00263428886148",
+     "beta": "712",
+     "d": "1896",
+     "tag": "usvp",
+     "problem": "LWEParameters(n=1024, q=12289, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1024, tag='h2_hide_mlwe')"
+    },
+    "dual_hybrid": {
+     "rop": "2.83070621569088e59",
+     "problem": "LWEParameters(n=1024, q=12289, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1024, tag='h2_hide_mlwe')",
+     "red": "2.63580273388579e59",
+     "guess": "1.94903481805082e58",
+     "beta": "676",
+     "p": "3",
+     "zeta": "0",
+     "t": "110",
+     "beta_": "676",
+     "N": "1.65129822302144e42",
+     "m": "1024"
+    }
+   },
+   "ts": "2026-10-19T17:00:24"
+  },
+  {
+   "inst": "sig_MSIS_inf_tau64",
+   "kind": "SIS",
+   "status": "ok",
+   "best_attack": "lattice",
+   "classical_log2": 173.73999999999998,
+   "beta": 595.0,
+   "quantum_log2": 157.675,
+   "wall_s": 3.3,
+   "lb": 262016,
+   "paper_claim": "173.7 / 157.7",
+   "raw": {
+    "lattice": {
+     "rop": "1.99963830117958e52",
+     "red": "1.99963830117958e52",
+     "sieve": "1e-100",
+     "beta": "595",
+     "eta": "595",
+     "zeta": "1",
+     "d": "2815",
+     "prob": "1",
+     "repetitions": "1",
+     "tag": "infinity",
+     "problem": "SISParameters(n=1280, q=8380417, length_bound=262016, m=2816, norm=+Infinity, tag='h2_sig_msis_tau64')"
+    }
+   },
+   "ts": "2026-10-19T17:00:28"
+  },
+  {
+   "inst": "C2_bind_proxy_lb4",
+   "kind": "SIS",
+   "status": "ok",
+   "best_attack": "lattice",
+   "classical_log2": null,
+   "beta": 43.0,
+   "quantum_log2": 11.395000000000001,
+   "wall_s": 2.4,
+   "note": "structured instance; plain proxy reference only",
+   "raw": {
+    "lattice": {
+     "rop": "+Infinity",
+     "red": "+Infinity",
+     "sieve": "+Infinity",
+     "beta": "43",
+     "eta": "43",
+     "zeta": "0",
+     "d": "3072",
+     "prob": "8.58378494646147e-22387",
+     "repetitions": "+Infinity",
+     "tag": "infinity",
+     "problem": "SISParameters(n=1024, q=12289, length_bound=4, m=3072, norm=+Infinity, tag='h2_c2_bind_proxy')"
+    }
+   },
+   "ts": "2026-10-19T17:00:31"
+  }
+ ]
+}

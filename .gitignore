@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+logs/*
+!logs/.gitkeep
+data/*
+!data/.gitkeep
+results/raw/
+results/summary/
+results/figures/
+run/fixed_run/logs/*
+!run/fixed_run/logs/.gitkeep

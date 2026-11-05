@@ -1,0 +1,33 @@
+{
+ "environment": {
+  "python": "3.11.8",
+  "ts": "2026-11-01T20:57:29"
+ },
+ "combos": [
+  {
+   "n": 64,
+   "t": 63,
+   "Q_bytes": 402028,
+   "L_bytes": 670192,
+   "final_fields": 1,
+   "sigma0_len": 5794,
+   "pk_len": 3712,
+   "sig_len": 5794
+  },
+  {
+   "n": 102,
+   "t": 80,
+   "Q_bytes": 524605,
+   "L_bytes": 924994,
+   "final_fields": 22,
+   "sigma0_len": 5794,
+   "pk_len": 3712,
+   "sig_len": 5794
+  }
+ ],
+ "notes": [
+  "Q=len(Sigma.serialize()) ver=2",
+  "L=σ0+Σ(τ+全文doc+pk+meta)（历史核查须出示全部中间文档）",
+  "旧表 VI 值经终检审计判非规范，本轮为规范重测基线"
+ ]
+}

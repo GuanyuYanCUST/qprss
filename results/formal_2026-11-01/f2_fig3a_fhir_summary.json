@@ -1,0 +1,135 @@
+{
+ "environment": {
+  "python": "3.11.8",
+  "processor": "Intel64 Family 6 Model 198 Stepping 2, GenuineIntel",
+  "ts": "2026-11-01T20:52:09"
+ },
+ "regime": "3 seeds x 30 formal reps, mean aggregation [0274]",
+ "cells": {
+  "sign|n3": {
+   "mean_ms": 17.0108,
+   "min_ms": 9.2507,
+   "max_ms": 57.4471,
+   "n_obs": 90
+  },
+  "verify|n3": {
+   "mean_ms": 8.4965,
+   "min_ms": 7.9253,
+   "max_ms": 10.084,
+   "n_obs": 90
+  },
+  "sign|n4": {
+   "mean_ms": 22.3928,
+   "min_ms": 13.2552,
+   "max_ms": 65.1542,
+   "n_obs": 90
+  },
+  "verify|n4": {
+   "mean_ms": 11.25,
+   "min_ms": 11.0961,
+   "max_ms": 11.5993,
+   "n_obs": 90
+  },
+  "sign|n5": {
+   "mean_ms": 23.8275,
+   "min_ms": 14.9957,
+   "max_ms": 73.7346,
+   "n_obs": 90
+  },
+  "verify|n5": {
+   "mean_ms": 12.4871,
+   "min_ms": 12.2936,
+   "max_ms": 13.1097,
+   "n_obs": 90
+  },
+  "sign|n6": {
+   "mean_ms": 25.7464,
+   "min_ms": 16.6441,
+   "max_ms": 68.9702,
+   "n_obs": 90
+  },
+  "verify|n6": {
+   "mean_ms": 13.7213,
+   "min_ms": 13.4917,
+   "max_ms": 14.3484,
+   "n_obs": 90
+  },
+  "sign|n7": {
+   "mean_ms": 26.8047,
+   "min_ms": 18.2498,
+   "max_ms": 71.0495,
+   "n_obs": 90
+  },
+  "verify|n7": {
+   "mean_ms": 14.9105,
+   "min_ms": 14.6805,
+   "max_ms": 15.3336,
+   "n_obs": 90
+  },
+  "sign|n8": {
+   "mean_ms": 28.1074,
+   "min_ms": 19.9477,
+   "max_ms": 72.5732,
+   "n_obs": 90
+  },
+  "verify|n8": {
+   "mean_ms": 16.1475,
+   "min_ms": 15.8748,
+   "max_ms": 16.9168,
+   "n_obs": 90
+  },
+  "sign|n9": {
+   "mean_ms": 29.7886,
+   "min_ms": 21.459,
+   "max_ms": 73.8105,
+   "n_obs": 90
+  },
+  "verify|n9": {
+   "mean_ms": 17.3005,
+   "min_ms": 17.0707,
+   "max_ms": 17.9173,
+   "n_obs": 90
+  },
+  "sign|n10": {
+   "mean_ms": 31.5492,
+   "min_ms": 23.2373,
+   "max_ms": 76.3749,
+   "n_obs": 90
+  },
+  "verify|n10": {
+   "mean_ms": 18.6373,
+   "min_ms": 18.2271,
+   "max_ms": 19.4077,
+   "n_obs": 90
+  },
+  "sign|n11": {
+   "mean_ms": 33.873,
+   "min_ms": 24.9152,
+   "max_ms": 77.4186,
+   "n_obs": 90
+  },
+  "verify|n11": {
+   "mean_ms": 20.0202,
+   "min_ms": 19.481,
+   "max_ms": 32.3883,
+   "n_obs": 90
+  },
+  "sign|n12": {
+   "mean_ms": 35.1809,
+   "min_ms": 26.5852,
+   "max_ms": 79.9912,
+   "n_obs": 90
+  },
+  "verify|n12": {
+   "mean_ms": 21.1826,
+   "min_ms": 20.6891,
+   "max_ms": 21.9014,
+   "n_obs": 90
+  }
+ },
+ "notes": [
+  "ver=2 一般编码（显式 M={1}）",
+  "字段=合成 FHIR 32B 记录",
+  "无离值剔除；逐观测正确性 fail-closed"
+ ]
+}

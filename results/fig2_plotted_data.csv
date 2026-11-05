@@ -1,0 +1,106 @@
+figure,panel,scheme,F,median_ms,provenance
+fig2a,Key Generation,QPRSS,0,4.273,rerun_20261101_f1
+fig2a,Key Generation,Kissel [13],0,6.1951,frozen_Fig2_Writing_Audit_01
+fig2a,Key Generation,Yang [33],0,45084.2087,frozen_Fig2_Writing_Audit_01
+fig2a,Key Generation,Zhao [34],0,58045.008,frozen_Fig2_Writing_Audit_01
+fig2a,Key Generation,Tang [35],0,9.2185,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,QPRSS,8,23.707,rerun_20261101_f1
+fig2b,Signing,QPRSS,16,40.085,rerun_20261101_f1
+fig2b,Signing,QPRSS,32,66.757,rerun_20261101_f1
+fig2b,Signing,QPRSS,64,121.009,rerun_20261101_f1
+fig2b,Signing,QPRSS,128,227.369,rerun_20261101_f1
+fig2b,Signing,Kissel [13],8,34.4609,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Kissel [13],16,64.0598,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Kissel [13],32,123.503,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Kissel [13],64,281.7143,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Kissel [13],128,486.6293,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Yang [33],8,58.0808,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Yang [33],16,55.6564,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Yang [33],32,97.6722,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Yang [33],64,57.9418,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Yang [33],128,97.6886,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Zhao [34],8,705.6629,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Zhao [34],16,1360.5526,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Zhao [34],32,2654.8302,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Zhao [34],64,5257.336,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Zhao [34],128,10493.3067,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Tang [35],8,723.5426,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Tang [35],16,844.7419,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Tang [35],32,3275.5023,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Tang [35],64,7966.1538,frozen_Fig2_Writing_Audit_01
+fig2b,Signing,Tang [35],128,15626.0536,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,QPRSS,8,16.209,rerun_20261101_f1
+fig2c,Verification,QPRSS,16,25.818,rerun_20261101_f1
+fig2c,Verification,QPRSS,32,45.739,rerun_20261101_f1
+fig2c,Verification,QPRSS,64,83.832,rerun_20261101_f1
+fig2c,Verification,QPRSS,128,160.448,rerun_20261101_f1
+fig2c,Verification,Kissel [13],8,74.2095,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Kissel [13],16,145.8213,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Kissel [13],32,295.1821,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Kissel [13],64,707.8867,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Kissel [13],128,1189.7009,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Yang [33],8,13.1412,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Yang [33],16,13.1097,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Yang [33],32,13.0351,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Yang [33],64,12.9924,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Yang [33],128,13.1264,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Zhao [34],8,107.1295,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Zhao [34],16,204.4772,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Zhao [34],32,407.2813,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Zhao [34],64,809.6794,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Zhao [34],128,1612.2706,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Tang [35],8,51.2928,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Tang [35],16,87.3224,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Tang [35],32,232.4885,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Tang [35],64,442.529,frozen_Fig2_Writing_Audit_01
+fig2c,Verification,Tang [35],128,884.311,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,QPRSS,8,13.285,rerun_20261101_f1
+fig2d,Redaction,QPRSS,16,13.2,rerun_20261101_f1
+fig2d,Redaction,QPRSS,32,13.305,rerun_20261101_f1
+fig2d,Redaction,QPRSS,64,13.342,rerun_20261101_f1
+fig2d,Redaction,QPRSS,128,13.415,rerun_20261101_f1
+fig2d,Redaction,Kissel [13],8,0.0387,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Kissel [13],16,0.0451,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Kissel [13],32,0.0319,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Kissel [13],64,0.0365,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Kissel [13],128,0.0507,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Yang [33],8,50.758,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Yang [33],16,49.1797,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Yang [33],32,47.7545,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Yang [33],64,91.7591,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Yang [33],128,88.9114,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Zhao [34],8,0.1369,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Zhao [34],16,0.1384,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Zhao [34],32,0.1522,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Zhao [34],64,0.1708,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Zhao [34],128,0.1943,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Tang [35],8,1335.3205,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Tang [35],16,1490.5525,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Tang [35],32,4492.716,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Tang [35],64,12726.9446,frozen_Fig2_Writing_Audit_01
+fig2d,Redaction,Tang [35],128,18154.3256,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,QPRSS,8,21.333,rerun_20261101_f1
+fig2e,Redacted Verif.,QPRSS,16,31.335,rerun_20261101_f1
+fig2e,Redacted Verif.,QPRSS,32,50.5,rerun_20261101_f1
+fig2e,Redacted Verif.,QPRSS,64,89.578,rerun_20261101_f1
+fig2e,Redacted Verif.,QPRSS,128,166.286,rerun_20261101_f1
+fig2e,Redacted Verif.,Kissel [13],8,64.8761,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Kissel [13],16,137.1439,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Kissel [13],32,309.4269,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Kissel [13],64,585.4815,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Kissel [13],128,1399.2868,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Yang [33],8,13.026,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Yang [33],16,13.0943,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Yang [33],32,13.2224,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Yang [33],64,13.125,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Yang [33],128,13.18,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Zhao [34],8,95.2358,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Zhao [34],16,193.9273,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Zhao [34],32,393.4623,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Zhao [34],64,787.1291,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Zhao [34],128,1583.1169,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Tang [35],8,56.8277,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Tang [35],16,93.9686,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Tang [35],32,245.9363,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Tang [35],64,471.7431,frozen_Fig2_Writing_Audit_01
+fig2e,Redacted Verif.,Tang [35],128,937.8922,frozen_Fig2_Writing_Audit_01

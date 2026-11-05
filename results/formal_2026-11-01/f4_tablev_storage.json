@@ -1,0 +1,50 @@
+{
+ "environment": {
+  "python": "3.11.8",
+  "ts": "2026-11-01T20:57:23"
+ },
+ "tableV_rows": {
+  "n64|t0": {
+   "sigma_base": 69392,
+   "log_t": 0,
+   "sigma_S": 69392,
+   "row_sum_check": true
+  },
+  "n64|t20": {
+   "sigma_base": 52592,
+   "log_t": 128932,
+   "sigma_S": 181524,
+   "row_sum_check": true
+  },
+  "n64|t40": {
+   "sigma_base": 35792,
+   "log_t": 248292,
+   "sigma_S": 284084,
+   "row_sum_check": true
+  },
+  "n102|t0": {
+   "sigma_base": 106233,
+   "log_t": 0,
+   "sigma_S": 106233,
+   "row_sum_check": true
+  },
+  "n102|t20": {
+   "sigma_base": 88473,
+   "log_t": 129532,
+   "sigma_S": 218005,
+   "row_sum_check": true
+  },
+  "n102|t40": {
+   "sigma_base": 70713,
+   "log_t": 249492,
+   "sigma_S": 320205,
+   "row_sum_check": true
+  }
+ },
+ "all_row_sum_checks_pass": true,
+ "notes": [
+  "ver=2 一般编码：σ_base/Log 与旧受限编码值有可预期偏移",
+  "每行断言 sigma_base+log_t == len(serialize())（全部通过）",
+  "旧表 V 数值为历史基线（非目标）"
+ ]
+}

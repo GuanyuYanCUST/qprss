@@ -1,0 +1,233 @@
+{
+ "meta": {
+  "stage": "full",
+  "timestamp": "2026-10-19T17:02:19.300907",
+  "estimator_commit": "53da5982597709ba0fdf94ea37a84d822310fd84",
+  "estimator_path": "/mnt/d/year/2024/成果/后量子基于策略的可编辑签名/大修/Step1.6_安全可行性闸门/tests/lattice-estimator",
+  "crlf_strip_blob_equal": "0/17 (0 => all equal)",
+  "sage_version": "passagemath version 10.6.48, Release Date: 2026-02-01",
+  "python": "3.10.12",
+  "uname": "Linux WIN-1UMSH9U2OME 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux",
+  "cost_model_note": "rough = Core-SVP: classical 2^(0.292*beta), quantum 2^(0.265*beta) — estimator repo convention (reduction.py; ADPS16 + repo self-erratum 0.265). full = repo default cost model (not Core-SVP; separate column)."
+ },
+ "rows": [
+  {
+   "inst": "pk_MLWE_n1280_full",
+   "status": "ok",
+   "best_attack": "dual_hybrid",
+   "classical_log2": 172.05007008280162,
+   "beta": 496.0,
+   "wall_s": 41.2,
+   "raw": {
+    "arora-gb": {
+     "rop": "+Infinity"
+    },
+    "bkw": {
+     "rop": "3.933855757073673e+88",
+     "m": "2.0387742040824456e+84",
+     "mem": "3840055739467495346832911700446892224976095322818666274973283422179393197776825221152",
+     "b": "12",
+     "t1": "0",
+     "t2": "32",
+     "ell": "11",
+     "#cod": "1150",
+     "#top": "0",
+     "#test": "130",
+     "tag": "coded-bkw",
+     "problem": "LWEParameters(n=1280, q=8380417, Xs=D(σ=0.82), Xe=D(σ=5.03), m=2038774204082445568962385559868629846474849251383505466003988147886041843260427599872, tag='h2_pk_full')"
+    },
+    "usvp": {
+     "rop": "1.75301402015240e53",
+     "red": "1.75301402015240e53",
+     "delta": "1.00331463042868",
+     "beta": "519",
+     "d": "2405",
+     "tag": "usvp",
+     "problem": "LWEParameters(n=1280, q=8380417, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1280, tag='h2_pk_full')"
+    },
+    "bdd": {
+     "rop": "3.74368292385738e52",
+     "red": "2.58321864171148e52",
+     "svp": "1.16046428214590e52",
+     "beta": "509",
+     "eta": "543",
+     "d": "2424",
+     "tag": "bdd",
+     "problem": "LWEParameters(n=1280, q=8380417, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1280, tag='h2_pk_full')"
+    },
+    "bdd_hybrid": {
+     "rop": "3.80168731111252e52",
+     "red": "2.64122302896662e52",
+     "svp": "1.16046428214590e52",
+     "beta": "509",
+     "eta": "543",
+     "zeta": "0",
+     "|S|": "1",
+     "d": "2467",
+     "prob": "1.0",
+     "repetitions": "1",
+     "tag": "hybrid",
+     "problem": "LWEParameters(n=1280, q=8380417, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1280, tag='h2_pk_full')"
+    },
+    "bdd_mitm_hybrid": {
+     "rop": "4.36892760486280e77",
+     "red": "2.51667350237456e76",
+     "svp": "4.11726025462534e77",
+     "beta": "519",
+     "eta": "2",
+     "zeta": "200",
+     "|S|": "265192328086861450484984804234606071734006781268096610566255577346898458997150993043040157348001",
+     "d": "2281",
+     "prob": "2.99687351045985e-23",
+     "repetitions": "153665817723533543237310",
+     "tag": "hybrid",
+     "problem": "LWEParameters(n=1280, q=8380417, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1280, tag='h2_pk_full')"
+    },
+    "dual": {
+     "rop": "3.82910074384486e54",
+     "mem": "906195080769306110582491759450538404",
+     "m": "1224",
+     "beta": "531",
+     "d": "2504",
+     "repetitions": "1",
+     "tag": "dual"
+    },
+    "dual_hybrid": {
+     "rop": "3.9187072e55*e^(-10) + 4.41862822848184e51",
+     "problem": "LWEParameters(n=1280, q=8380417, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1280, tag='h2_pk_full')",
+     "red": "4.41862822848184e51",
+     "guess": "3.9187072e55*e^(-10)",
+     "beta": "496",
+     "p": "3",
+     "zeta": "20",
+     "t": "70",
+     "beta_": "499",
+     "N": "7.26591405590728e30",
+     "m": "1280"
+    }
+   },
+   "ts": "2026-10-19T17:01:33"
+  },
+  {
+   "inst": "hide_MLWE_n1024_full",
+   "status": "ok",
+   "best_attack": "dual_hybrid",
+   "classical_log2": 219.48982046558461,
+   "beta": 670.0,
+   "wall_s": 41.6,
+   "raw": {
+    "arora-gb": {
+     "rop": "+Infinity"
+    },
+    "bkw": {
+     "rop": "5.3164306979543963e+82",
+     "m": "5.2864984618690204e+78",
+     "mem": "10544685591429104788970689776203666869669131964108727353293532643728675004141589",
+     "b": "19",
+     "t1": "0",
+     "t2": "21",
+     "ell": "18",
+     "#cod": "900",
+     "#top": "0",
+     "#test": "128",
+     "tag": "coded-bkw",
+     "problem": "LWEParameters(n=1024, q=12289, Xs=D(σ=0.82), Xe=D(σ=4.97), m=5286498461869020439772840192781175951869607723231167362523448215860033301250048, tag='h2_hide_full')"
+    },
+    "usvp": {
+     "rop": "1.77923637043603e69",
+     "red": "1.77923637043603e69",
+     "delta": "1.00263428886148",
+     "beta": "712",
+     "d": "1896",
+     "tag": "usvp",
+     "problem": "LWEParameters(n=1024, q=12289, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1024, tag='h2_hide_full')"
+    },
+    "bdd": {
+     "rop": "1.51869627837081e68",
+     "red": "7.95278274166733e67",
+     "svp": "7.23418004204078e67",
+     "beta": "696",
+     "eta": "731",
+     "d": "1869",
+     "tag": "bdd",
+     "problem": "LWEParameters(n=1024, q=12289, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1024, tag='h2_hide_full')"
+    },
+    "bdd_hybrid": {
+     "rop": "1.53903587617559e68",
+     "red": "8.15617871971509e67",
+     "svp": "7.23418004204078e67",
+     "beta": "696",
+     "eta": "731",
+     "zeta": "0",
+     "|S|": "1",
+     "d": "1899",
+     "prob": "1.0",
+     "repetitions": "1",
+     "tag": "hybrid",
+     "problem": "LWEParameters(n=1024, q=12289, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1024, tag='h2_hide_full')"
+    },
+    "bdd_mitm_hybrid": {
+     "rop": "4.82437271696816e102",
+     "red": "2.81690163284359e98",
+     "svp": "4.82409102680488e102",
+     "beta": "713",
+     "eta": "2",
+     "zeta": "281",
+     "|S|": "116152915468828832015749268037411163366568542178652549228527576830929831901584329331661030125548475046990467593577595545542044517238435",
+     "d": "1632",
+     "prob": "2.74022078872065e-29",
+     "repetitions": "168058362484657581118554740527",
+     "tag": "hybrid",
+     "problem": "LWEParameters(n=1024, q=12289, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1024, tag='h2_hide_full')"
+    },
+    "dual": {
+     "rop": "1.18808135801304e72",
+     "mem": "2169111289249378534139769773548856460492284785032",
+     "m": "920",
+     "beta": "742",
+     "d": "1944",
+     "repetitions": "1",
+     "tag": "dual"
+    },
+    "dual_hybrid": {
+     "rop": "1.8165454e69*e^(-15) + 1.18253954363055e66",
+     "problem": "LWEParameters(n=1024, q=12289, Xs=D(σ=0.82), Xe=D(σ=0.82), m=1024, tag='h2_hide_full')",
+     "red": "1.18253954363055e66",
+     "guess": "1.8165454e69*e^(-15)",
+     "beta": "670",
+     "p": "3",
+     "zeta": "30",
+     "t": "80",
+     "beta_": "661",
+     "N": "1.42172266264030e41",
+     "m": "1024"
+    }
+   },
+   "ts": "2026-10-19T17:02:15"
+  },
+  {
+   "inst": "sig_MSIS_inf_tau64_full",
+   "status": "ok",
+   "best_attack": "lattice",
+   "classical_log2": 199.7851669130758,
+   "beta": 597.0,
+   "wall_s": 2.2,
+   "raw": {
+    "lattice": {
+     "rop": "1.38461148473978e60",
+     "red": "7.21939333700227e59",
+     "sieve": "6.62672151039551e59",
+     "beta": "597",
+     "eta": "594",
+     "zeta": "0",
+     "d": "2816",
+     "prob": "1",
+     "repetitions": "1",
+     "tag": "infinity",
+     "problem": "SISParameters(n=1280, q=8380417, length_bound=262016, m=2816, norm=+Infinity, tag='h2_sig_full')"
+    }
+   },
+   "ts": "2026-10-19T17:02:18"
+  }
+ ]
+}

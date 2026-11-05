@@ -1,0 +1,100 @@
+{
+ "source": "scripts/data_H7/h7_quantum_reopt.json (fresh run 2026-10-22 23:4x, exit 0, 248s)",
+ "detail": {
+  "pk_mlwe": {
+   "rough": {
+    "attack": "dual_hybrid",
+    "rop_log2": 147.1684,
+    "beta": 504
+   },
+   "adps16_classical": {
+    "attack": "dual_hybrid",
+    "rop_log2": 147.1684,
+    "beta": 504
+   },
+   "adps16_quantum": {
+    "attack": "dual_hybrid",
+    "rop_log2": 134.1521,
+    "beta": 506
+   },
+   "matzov_default": {
+    "attack": "dual_hybrid",
+    "rop_log2": 172.0501,
+    "beta": 496
+   }
+  },
+  "hide_mlwe": {
+   "rough": {
+    "attack": "dual_hybrid",
+    "rop_log2": 197.4949,
+    "beta": 676
+   },
+   "adps16_classical": {
+    "attack": "dual_hybrid",
+    "rop_log2": 197.4949,
+    "beta": 676
+   },
+   "adps16_quantum": {
+    "attack": "dual_hybrid",
+    "rop_log2": 180.6564,
+    "beta": 681
+   },
+   "matzov_default": {
+    "attack": "dual_hybrid",
+    "rop_log2": 219.4898,
+    "beta": 670
+   }
+  },
+  "sig_msis_proxy": {
+   "rough": {
+    "attack": "lattice",
+    "rop_log2": 173.74,
+    "beta": 595
+   },
+   "adps16_classical": {
+    "attack": "lattice",
+    "rop_log2": 173.74,
+    "beta": 595
+   },
+   "adps16_quantum": {
+    "attack": "lattice",
+    "rop_log2": 157.675,
+    "beta": 595
+   },
+   "matzov_default": {
+    "attack": "lattice",
+    "rop_log2": 199.7852,
+    "beta": 597
+   }
+  },
+  "kernel_sis_proxy": {
+   "rough": {
+    "attack": "lattice",
+    "rop_log2": Infinity,
+    "beta": 43
+   },
+   "adps16_classical": {
+    "attack": "lattice",
+    "rop_log2": Infinity,
+    "beta": 43
+   },
+   "adps16_quantum": {
+    "attack": "lattice",
+    "rop_log2": Infinity,
+    "beta": 43
+   },
+   "matzov_default": {
+    "attack": "lattice",
+    "rop_log2": Infinity,
+    "beta": 43
+   }
+  },
+  "_kyber512_anchor": {
+   "rough": {
+    "attack": "dual_hybrid",
+    "rop_log2": 115.5099,
+    "beta": 395
+   }
+  }
+ }
+}

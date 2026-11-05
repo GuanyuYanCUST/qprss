@@ -1,0 +1,31 @@
+{
+ "facts": {
+  "signature_B": 5794,
+  "pk_B": 3712,
+  "sk_B": 672,
+  "cert_signer_B": 9572,
+  "cert_redactor_B": 9572,
+  "challenge_hint_cbytes": 34,
+  "merkle_depth_n8": 3,
+  "pol2_encoding_B": 26,
+  "pol1_encoding_B": 8,
+  "sigma0_B": 5794,
+  "artifact_t0_B": 20965,
+  "h_cert_len": 48,
+  "bid_len": 48
+ },
+ "checks": {
+  "sigma=5794": true,
+  "pk=3712": true,
+  "cert=9572": true,
+  "pol2 > pol1 (一般描述符更长)": true
+ },
+ "environment": {
+  "python": "3.11.8",
+  "ts": "2026-11-01T20:57:30"
+ },
+ "notes": [
+  "第五章攻击成本估计保持原文（核心参数未变）",
+  "全部尺寸由当前对齐实现实测"
+ ]
+}

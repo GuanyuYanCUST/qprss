@@ -1,0 +1,5 @@
+# Python 3.11+ required.
+# NumPy is a hard dependency (commit_as.py imports it unconditionally;
+# two test suites import it directly). Reference experiments used
+# Python 3.11.8 / NumPy 1.26.4.
+numpy>=1.26
