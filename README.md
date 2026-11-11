@@ -7,7 +7,9 @@ administrator registration/revocation state machine, and history (`hist`) /
 freshness (`fresh`) verification modes.
 
 This repository is the reference implementation and experiment suite for the
-manuscript "QPRSS: ..." (citation placeholder — add after acceptance).
+manuscript "QPRSS: Quantum-Resistant Policy-Driven Redactable Signature
+Scheme for Multi-Redactor Medical Data Sharing", currently under review; the
+citation will be added upon acceptance.
 
 ## Cryptographic core (all post-quantum, no classical fallback)
 
@@ -41,9 +43,10 @@ s6t64/                     protocol package (pure Python stdlib)
   policy.py, l_chain.py    restricted policy language / sequential-signature baseline
   fhir_codec.py            HL7 FHIR field codec (Fig. 3a experiment)
 run/fixed_run/             frozen copy of the package used by experiment scripts
-scripts/                   experiments F1–F6 (paper Figs. 2–3, Tables V–VI)
-tests/                     17 standalone test suites (params, distributions,
-                           bytes, regression, theorem-level executable checks)
+scripts/                   experiments F1–F7 (paper Figs. 2–3, Tables V–VI)
+tests/                     18 standalone test suites (params, distributions,
+                           bytes, regression, paper-value anchors,
+                           theorem-level executable checks)
 results/formal_2026-11-01/ formal-run outputs (raw + processed, see provenance)
 results/n32_storage_recomputed.csv  n=32 storage series (Fig. 3d)
 results/fig2_plotted_data.csv      exact plotted values of paper Fig. 2 (all
@@ -51,6 +54,8 @@ results/fig2_plotted_data.csv      exact plotted values of paper Fig. 2 (all
 estimator/                 lattice-estimator result records for Table III
                            (h2_rough.json / h2_full.json plus the cost-model
                            comparison task1_comparison.csv / task1_results.json)
+v4_work/                   slow-reference commitment build used by
+                           tests/test_v4_commit_as_equiv.py (live dependency)
 ```
 
 ## Requirements
@@ -70,7 +75,17 @@ python tests/test_s6_params.py       # parameters, acceptance-rate closed form,
                                      # challenge distribution, fixed-length encoding
 python tests/test_s6_thm1_thm5.py    # theorem-level executable checks
                                      # (simulator/programming, fork extraction)
-...                                   # (16 suites in total)
+python tests/test_paper_values.py    # deterministic paper-value anchors
+                                     # (Table V/VI bytes, encoding, modes)
+...                                   # (18 suites in total)
+```
+
+All 18 suites run in ~2 minutes; each exits non-zero on first failure
+(fail-closed). A unified entry point is provided:
+
+```bash
+python tests/run_all.py              # runs every suite, per-suite PASS/FAIL,
+                                     # writes logs/run_all.json
 ```
 
 ## Reproduce the paper experiments
@@ -81,13 +96,22 @@ python scripts/f2_fig3a_fhir.py       # Fig. 3a HL7 FHIR fields 3..12
 python scripts/f3_fig3bc_multihop.py  # Fig. 3b/3c multi-hop redact + history verify
 python scripts/f4_tablev_storage.py   # Table V / Fig. 3d storage decomposition (n=64,102)
 python scripts/f5_tablevi_vs_lchain.py# Table VI transport vs sequential-signature baseline
+                                       # (deep chains n=64 t=63, n=102 t=80)
 python scripts/f6_sizes_and_params.py # key/sig/cert byte lengths
+python scripts/f7_tablevi_full_curve.py# Table VI full legal-depth curve, all n
+                                       # (crossover rows n=64 t=12, n=102 t=15)
 python scripts/summarize_to_csv.py    # JSON → CSV postprocessing
 ```
 
 Notes:
-- F4/F6 are **byte-deterministic** (fixed XOF seeds): rerunning reproduces the
-  archived Table V / Fig. 3d values exactly on any machine.
+- F4/F6/F7 are **byte-deterministic** (fixed XOF seeds): rerunning reproduces
+  the archived Table V / Table VI / Fig. 3d values exactly on any machine.
+- F7 sweeps every legal hop depth (t = 0..n−1; n = 32/64/102, 198 states, each
+  hist-verified) and asserts the four revised-manuscript Table VI rows
+  (140,500/142,138 · 402,028/670,192 · 192,455/193,744 · 524,605/924,994 B)
+  plus the single crossover per n (t = 9/12/15). The region where the QPRSS
+  artifact is LARGER than the baseline (t below the crossover) is kept in
+  full — see `results/tablevi_full_curve.csv`.
 - F1–F3 are timing measurements and are machine/thermal-state dependent; the
   archived formal run (`results/formal_2026-11-01/`) was taken in a clean
   window on the reference machine (see provenance below).
@@ -96,9 +120,11 @@ Notes:
 
 All numbers in the paper's experiment section trace to `results/`:
 `formal_2026-11-01/raw/` (per-observation CSVs) and processed summaries, plus
-`n32_storage_recomputed.csv` for the n=32 arm of Fig. 3d (regenerated
-deterministically by the same construction as F4; chain ends at hop 31 by the
-n=32 policy). The Table III concrete-security estimates were produced with the
+`n32_storage_recomputed.csv` for the n=32 arm of Fig. 3d and
+`tablevi_full_curve.csv` for the full Table VI transmission curve — both
+regenerated deterministically by `scripts/f7_tablevi_full_curve.py` (F4
+construction and F5 accounting; the n=32 chain ends at hop 31 by the n=32
+policy). The Table III concrete-security estimates were produced with the
 [lattice-estimator](https://github.com/malb/lattice-estimator) at commit
 `53da5982597709ba0fdf94ea37a84d822310fd84` (records in `estimator/`).
 

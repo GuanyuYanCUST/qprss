@@ -14,6 +14,7 @@ import json
 import os
 import sys
 
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # run/fixed_run
 

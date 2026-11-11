@@ -1,0 +1,22 @@
+{
+ "python": "3.11.8",
+ "ts": "2026-11-11T21:58:04",
+ "n_rows": 198,
+ "crossovers": {
+  "32": 9,
+  "64": 12,
+  "102": 15
+ },
+ "checks": [
+  "n=32 t=0: Q=40956 OK",
+  "n=32 t=31: Q=210240 OK",
+  "n=64 t=12: Q=140500 L=142138",
+  "n=64 t=63: Q=402028 L=670192",
+  "n=102 t=15: Q=192455 L=193744",
+  "n=102 t=80: Q=524605 L=924994",
+  "n=32: single crossover t=9; Q>L for t=0..8 (kept); max reduction 33.65%",
+  "n=64: single crossover t=12; Q>L for t=0..11 (kept); max reduction 40.01%",
+  "n=102: single crossover t=15; Q>L for t=0..14 (kept); max reduction 44.19%"
+ ],
+ "elapsed_s": 64.7
+}
