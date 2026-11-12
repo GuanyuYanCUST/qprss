@@ -41,7 +41,8 @@ python -I scripts/summarize_to_csv.py       # JSON → CSV postprocessing
 ```
 
 Statistical conventions: Fig. 2 = median of 50 formal observations after
-25 warmup per configuration (KeyGen: 30 sessions); Fig. 3a = mean of
+25 warmup per configuration (KeyGen: 50 independent sessions, no warmup —
+see `scripts/f1b_keygen50.py` and `results/keygen_50_*.csv`); Fig. 3a = mean of
 3 seeds × 30 repetitions; Fig. 3b/3c = mean over 5 random seeds
 (1 observation each, t = 0..40, n = 64/102). Reruns vary with hardware and
 thermal state; the paper cites `results/formal_2026-11-01/` (clean-window

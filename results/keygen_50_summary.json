@@ -1,0 +1,38 @@
+{
+ "environment": {
+  "cpu": "Intel64 Family 6 Model 198 Stepping 2, GenuineIntel",
+  "machine": "AMD64",
+  "os": "Windows-10-10.0.26200-SP0",
+  "python": "3.11.8",
+  "numpy": "1.26.4",
+  "git_head": "8dc808c",
+  "script": "scripts/f1b_keygen50.py",
+  "ts": "2026-11-12T08:56:20",
+  "warmup_sessions": 0,
+  "formal_sessions": 50,
+  "timing": "time.perf_counter_ns around one B1-65 keygen call (signer role, RA excluded)",
+  "seed_family": "PA|F1|kg50|"
+ },
+ "stats": {
+  "N": 50,
+  "median_ms": 4.281,
+  "mean_ms": 4.3592,
+  "min_ms": 4.146,
+  "max_ms": 6.7077,
+  "std_ms": 0.386,
+  "q1_ms": 4.2076,
+  "q3_ms": 4.329,
+  "iqr_ms": 0.1214
+ },
+ "archived_n30_reference": {
+  "N": 30,
+  "median_ms": 4.2709,
+  "mean_ms": 4.3198,
+  "min_ms": 4.1571,
+  "max_ms": 5.5901,
+  "std_ms": 0.251,
+  "q1_ms": 4.2369,
+  "q3_ms": 4.3055,
+  "iqr_ms": 0.0686
+ }
+}

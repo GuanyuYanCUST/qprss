@@ -10,7 +10,9 @@ implementation (H_cert/BindId/M_resp5, general policy encoding ver=2);
 (2) the signer certificate scope is an RID enumeration (mandatory since
 the identity-binding fix; adds ~17 B to the artifact); (3) the policy is
 an explicit ver=2 descriptor with M={1}.
-KeyGen = 30 independent sessions (B1-65 keygen, RA excluded), median.
+KeyGen = 50 independent sessions (B1-65 keygen, RA excluded), median.
+(The 2026-11-01 formal run used 30 sessions, superseded 2026-11-12 by the
+50-session rerun scripts/f1b_keygen50.py; archived results unchanged.)
 """
 import csv
 import hashlib
@@ -33,7 +35,7 @@ B1 = s5_sig.core("B1")
 RID = bytes.fromhex("0f1e2d3c4b5a69788796a5b4c3d2e1f0")
 F_GRID = [8, 16, 32, 64, 128]
 WARMUP, FORMAL = 25, 50
-KG_SESSIONS = 30
+KG_SESSIONS = 50
 FIELD_SEED = 20261015
 OPS = ["SIGN", "VERIFY", "REDACT", "VVERIFY"]
 V2 = pol.POL_VER_GENERAL

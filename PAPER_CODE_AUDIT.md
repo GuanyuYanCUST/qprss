@@ -79,7 +79,7 @@ verbatim (main.tex ~:780).
 
 | Paper artifact | Script | Data (tracked) | Verdict |
 |---|---|---|---|
-| Fig. 2 (five ops; median of 50 + 25 warmup; KeyGen 30 sessions) | `scripts/f1_fig2_qprss.py` | `results/formal_2026-11-01/f1_*`, `results/fig2_plotted_data.csv` | ✅ provenance + sha256 locked (baseline arms frozen sessions, not in repo — stated in README) |
+| Fig. 2 (five ops; median of 50 + 25 warmup; KeyGen 50 independent sessions — 2026-11-12 rerun via `scripts/f1b_keygen50.py`, median 4.281 ms, archived 30-session run superseded but kept) | `scripts/f1_fig2_qprss.py`, `scripts/f1b_keygen50.py` | `results/formal_2026-11-01/f1_*`, `results/keygen_50_*.csv`, `results/fig2_plotted_data.csv` | ✅ provenance locked (baseline arms frozen sessions, not in repo — stated in README) |
 | Fig. 3a (FHIR 3..12; mean of 3 seeds × 30 reps) | `scripts/f2_fig3a_fhir.py` | `f2_*` | ✅ |
 | Fig. 3b/3c (multi-hop; 5-seed means) | `scripts/f3_fig3bc_multihop.py` | `f3_*` | ✅ seed-mean citation values reproduce (295.77 / 341.24 ms endpoints) |
 | Fig. 3d + Table V (storage; n=64/102) | `scripts/f4_tablev_storage.py` | `f4_*` | ✅ six rows byte-exact (re-verified live 2026-11-11, 82/82 rows) |
